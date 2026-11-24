@@ -193,7 +193,7 @@ def reconcile_observed(record: dict, remote: dict[str, str],
     if set(remote) != {"a", "b"}:
         return "pause_remote_state_unavailable", record
 
-    base, _ = assess(remote, verified_checkpoints, quota_signal="unknown")
+    base, _reason = assess(remote, verified_checkpoints, quota_signal="unknown")
     if base == "wait":
         return "wait_active_kaggle_job", record
     if base == "pause" and any(v in {"error", "failed", "cancelled", "cancelacknowledged"}
