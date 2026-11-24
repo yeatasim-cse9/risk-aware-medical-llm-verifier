@@ -1,10 +1,6 @@
 name: Telegram Read-only Diagnostic
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/telegram-readonly-diagnostic.yml
   workflow_dispatch:
 
 permissions:
