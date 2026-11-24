@@ -1,0 +1,63 @@
+name: Kaggle Tiny GPU Inference Read Only Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kaggle-tiny-gpu-inference-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout source without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Offline model and checkpoint validation tests
+        run: |
+          python -m unittest discover -s tests -p test_tiny_gpu_inference.py -v
+          python scripts/build_tiny_gpu_inference.py --commit "$(git rev-parse HEAD)" --out build/gpu-inference
+          python -m py_compile build/gpu-inference/runner.py
+      - name: Confirm Kaggle secret is configured
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Kaggle secret missing"
+            exit 1
+          fi
+      - name: Pinned Kaggle CLI
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read-only quota and new notebook discovery
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if kaggle quota > /dev/null 2>&1; then
+            echo "TINY_GPU_INFERENCE_QUOTA_ENDPOINT_OK"
+          else
+            echo "::error::GPU quota endpoint unavailable"
+            exit 1
+          fi
+          python - <<'PY'
+          from scripts.kaggle_status import check
+          status=check("yeatasimbillah/medical-llm-gpu-inference-pilot","any")
+          if status == "missing":
+              print("TINY_GPU_INFERENCE_NOTEBOOK_ABSENT")
+          else:
+              print("TINY_GPU_INFERENCE_NOTEBOOK_EXISTS_DO_NOT_RESUBMIT")
+          print("TINY_GPU_INFERENCE_PREFLIGHT_NO_GPU_SESSION_STARTED")
+          PY

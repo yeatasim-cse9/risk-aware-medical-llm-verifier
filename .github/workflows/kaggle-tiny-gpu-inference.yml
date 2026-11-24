@@ -1,0 +1,154 @@
+name: Kaggle GPU Tiny Transformer Inference Controller
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Choose preflight, prepare, submit, status or verify"
+        type: choice
+        options: [preflight, prepare, submit, status, verify]
+        default: preflight
+        required: true
+      confirm_gpu_quota:
+        description: "For submit only - approve use of remaining GPU time"
+        type: boolean
+        default: false
+      source_commit:
+        description: "For verify - exact Git SHA recorded on submission"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kaggle-gpu-tiny-inference-controller
+  cancel-in-progress: false
+
+jobs:
+  gpu-inference:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Require pinned source commit for verification
+        if: inputs.operation == 'verify'
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Pass 40-character source SHA from submit log"
+            exit 1
+          fi
+      - name: Checkout exact research code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.operation == 'verify' && inputs.source_commit || github.sha }}
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Offline inference packaging and validation tests
+        run: |
+          python -m compileall -q scripts tests
+          python -m unittest discover -s tests -p test_tiny_gpu_inference.py -v
+      - name: Create isolated GPU Transformer inference package
+        if: inputs.operation == 'prepare' || inputs.operation == 'submit'
+        run: |
+          python scripts/build_tiny_gpu_inference.py --commit "$(git rev-parse HEAD)" --out build/gpu-inference
+          python -m py_compile build/gpu-inference/runner.py
+      - name: Upload code-only preview
+        if: inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-gpu-model-source-${{ github.run_id }}
+          path: build/gpu-inference
+          retention-days: 7
+      - name: Authenticate and install pinned Kaggle CLI
+        if: inputs.operation != 'prepare'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::KAGGLE_API_TOKEN missing"
+            exit 1
+          fi
+          python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read-only accelerator quota endpoint check
+        if: inputs.operation == 'preflight' || inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if kaggle quota > /dev/null 2>&1; then
+            echo "TINY_GPU_INFERENCE_QUOTA_API_OK; remaining GPU hours must be reviewed in Kaggle UI"
+          else
+            echo "::error::Cannot query accelerator quota; no submission"
+            exit 1
+          fi
+      - name: Prevent duplicate GPU notebook creation
+        if: inputs.operation == 'preflight' || inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from scripts.kaggle_status import check
+          s = check("yeatasimbillah/medical-llm-gpu-inference-pilot", "any")
+          if s != "missing":
+              raise SystemExit("TINY_GPU_INFERENCE_DUPLICATE_SUBMISSION_BLOCKED")
+          print("TINY_GPU_INFERENCE_REMOTE_SLOT_FREE")
+          PY
+      - name: Require one-time GPU quota approval
+        if: inputs.operation == 'submit'
+        env:
+          APPROVED: ${{ inputs.confirm_gpu_quota }}
+        shell: bash
+        run: |
+          if [[ "$APPROVED" != "true" ]]; then
+            echo "::error::User approval of GPU usage required"
+            exit 1
+          fi
+          echo "TINY_GPU_INFERENCE_CONSENT_CONFIRMED"
+      - name: Submit one new private model inference notebook
+        if: inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "TINY_GPU_INFERENCE_FROZEN_SOURCE: $(git rev-parse HEAD)"
+          kaggle kernels push -p build/gpu-inference
+      - name: Check remote GPU inference status
+        if: inputs.operation == 'status'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/kaggle_status.py yeatasimbillah/medical-llm-gpu-inference-pilot --require any
+      - name: Verify saved inference and reloadable model checkpoint
+        if: inputs.operation == 'verify'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-gpu-inference-pilot --require complete
+          mkdir -p build/gpu-inference-result
+          kaggle kernels output yeatasimbillah/medical-llm-gpu-inference-pilot -p build/gpu-inference-result
+          python scripts/verify_tiny_gpu_inference.py build/gpu-inference-result --expected-commit "$(git rev-parse HEAD)"
+          echo "TINY_GPU_MODEL_REMOTE_CHECKPOINT_VERIFIED"
+      - name: Retain verified synthetic inference outputs
+        if: inputs.operation == 'verify' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-gpu-tiny-model-${{ github.run_id }}
+          path: |
+            build/gpu-inference-result/checkpoints/tiny-transformer-inference.json
+            build/gpu-inference-result/checkpoints/tiny-transformer-weights.pt
+          retention-days: 7
