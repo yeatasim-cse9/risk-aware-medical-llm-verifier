@@ -1,8 +1,14 @@
-"""Fail-closed parser of Kaggle CLI status for safe CPU pilot submission.
+"""Fail-closed Kaggle status preflight for a synthetic CPU pilot.
 
-The Kaggle CLI may change its display format; unknown statuses are blocked.
+A notebook that has never been created has no status. Check the
+authenticated owner's notebook list first; never confuse an API failure
+with an absent notebook.
 """
+from __future__ import annotations
+
 import argparse
+import csv
+import io
 import re
 import subprocess
 
@@ -13,7 +19,7 @@ TERMINAL = {"complete", "error", "cancelacknowledged", "cancelled", "failed"}
 def parse_status(text: str) -> str:
     match = re.search(
         r'has status\s+["\']?(?:KernelWorkerStatus\.)?([A-Za-z_]+)',
-        text, flags=re.IGNORECASE
+        text, flags=re.IGNORECASE,
     )
     if not match:
         raise ValueError("Unrecognized Kaggle status format")
@@ -23,22 +29,50 @@ def parse_status(text: str) -> str:
     return value
 
 
-def check(kernel: str, require: str) -> str:
-    proc = subprocess.run(["kaggle", "kernels", "status", kernel],
-                          capture_output=True, text=True, timeout=90)
-    output = (proc.stdout or "") + "\n" + (proc.stderr or "")
+def parse_list(text: str, kernel: str) -> bool:
+    """Check exact owner/slug against successful owner-scoped CSV listing."""
+    text = text.strip()
+    if not text or text.lower() == "no kernels found":
+        return False
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise ValueError("Missing Kaggle CSV header")
+    fields = {f.strip().lower(): f for f in reader.fieldnames}
+    if "ref" not in fields:
+        raise ValueError("Unknown Kaggle CSV format; fail closed")
+    ref_col = fields["ref"]
+    refs = {row[ref_col].strip() for row in reader if row.get(ref_col)}
+    return kernel in refs
+
+
+def kernel_exists(kernel: str) -> bool:
+    owner, sep, slug = kernel.partition("/")
+    if not sep or not owner or not slug or "/" in slug:
+        raise ValueError("Expected owner/notebook-slug")
+    cmd = ["kaggle", "kernels", "list", "--mine",
+           "--search", slug, "--csv", "--page-size", "100"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
     if proc.returncode != 0:
-        if re.search(r'\b404\b|not found|does not exist', output, re.IGNORECASE):
-            state = "missing"
-        else:
-            raise RuntimeError("Kaggle status request failed; refusing to proceed")
+        raise RuntimeError("Kaggle notebook listing failed; refusing to submit")
+    return parse_list(proc.stdout, kernel)
+
+
+def check(kernel: str, require: str) -> str:
+    if not kernel_exists(kernel):
+        state = "missing"
     else:
-        state = parse_status(output)
+        proc = subprocess.run(
+            ["kaggle", "kernels", "status", kernel],
+            capture_output=True, text=True, timeout=90,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError("Existing Kaggle notebook status failed; refusing to proceed")
+        state = parse_status(proc.stdout + "\n" + proc.stderr)
     print(f"Kernel status: {kernel} = {state}")
     if require == "complete" and state != "complete":
-        raise RuntimeError("The previous Kaggle kernel must be complete")
+        raise RuntimeError("Previous Kaggle notebook must be complete")
     if require == "not-active" and state not in {"missing", "complete"}:
-        raise RuntimeError("Kernel active or failed; manual review required")
+        raise RuntimeError("Kaggle notebook active or failed; manual review required")
     return state
 
 
