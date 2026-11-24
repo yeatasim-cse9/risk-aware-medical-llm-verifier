@@ -60,3 +60,12 @@ The test does not guarantee every future Kaggle run will be available, free or u
 - All Python CI/unit tests passed in `45479386537`.
 
 Still **not** proven: the first actual future cron event execution (GitHub schedules are best-effort), a real increasing checkpoint transition persisted to the public synthetic ledger, quota-aware automatic session relaunch, failure recovery or actual medical experiments. Exactly-once Telegram delivery cannot be guaranteed if delivery succeeds but ledger persistence fails.
+
+## Step 10.4A — read-only two-slot automatic-resume safety preflight
+
+- Run `45480261444`: succeeded with exact private synthetic Kaggle A/B status read and independently downloaded checkpoints.
+- Slot A `complete`, validated `100/100`; Slot B `complete`, validated `80/100` against the same frozen source SHA.
+- Observed controller decision: `AUTO_RESUME_PREFLIGHT: STOP ALL_100_TASKS_COMPLETE_NO_RESTART`.
+- Repository CI and offline safety unit tests: run `45480261149` succeeded.
+- No Kaggle submission, Telegram message, medical data processing, or actual quota consumption measurement occurred.
+- Policy simulation covers running/queued/failed, missing or corrupt checkpoints, equal-progress ambiguity, unknown quota and insufficient quota. **Real quota monitoring and automated, idempotent resume remain unimplemented.**
