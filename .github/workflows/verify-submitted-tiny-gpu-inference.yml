@@ -1,0 +1,65 @@
+name: Verify Submitted Tiny GPU Inference and Checkpoint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/verify-submitted-tiny-gpu-inference.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-submitted-tiny-gpu-inference
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout current trusted verifier code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run offline GPU inference verifier safety tests
+        run: python -m unittest discover -s tests -p test_tiny_gpu_inference.py -v
+      - name: Install pinned Kaggle client
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Check submitted Kaggle GPU notebook status
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Kaggle token missing"
+            exit 1
+          fi
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-gpu-inference-pilot --require complete
+      - name: Fetch saved GPU inference and weight checkpoints
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/verified-tiny-model
+          kaggle kernels output yeatasimbillah/medical-llm-gpu-inference-pilot -p build/verified-tiny-model
+          python scripts/verify_tiny_gpu_inference.py build/verified-tiny-model --expected-commit 184a1270aa6aaef8bc0e82c142e3285d0ea82084
+          echo "TINY_GPU_MODEL_REMOTE_CHECKPOINT_VERIFIED"
+          echo "TINY_GPU_MODEL_NOTE: untrained synthetic Transformer; not medical accuracy evidence"
+      - name: Upload verified synthetic-only files
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-tiny-gpu-inference-${{ github.run_id }}
+          path: |
+            build/verified-tiny-model/checkpoints/tiny-transformer-inference.json
+            build/verified-tiny-model/checkpoints/tiny-transformer-weights.pt
+          if-no-files-found: error
+          retention-days: 7
