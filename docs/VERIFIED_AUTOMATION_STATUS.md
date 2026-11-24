@@ -133,3 +133,13 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - Hub reports 22,713,728 parameters, giving theoretical parameter-only storage 90,854,912 bytes FP32 or 45,427,456 bytes FP16. These do **not** prove peak GPU memory or actual feasibility.
 - Recorded exact evidence in `configs/model-pins/all-minilm-l6-v2.json` and `docs/MINILM_PROVENANCE_FEASIBILITY.md`. Independent byte-level file hash verification, tokenizer hashes, actual weight/model license-text review, permissible transfer route, GPU memory benchmark and separate approval remain pending.
 - No model or tokenizer bytes were downloaded; no Kaggle GPU session was run; no actual medical datasets or E1–E7 experiments were processed.
+
+## Step 10.5E — End-to-end historical synthetic infrastructure revalidation
+
+- GitHub Actions `45488584121` **success**: 137 repository unit tests passed, four remote private Kaggle notebooks reported `complete`, and their saved outputs were independently downloaded and verified. Separate repository CI run `45488584172` **success**.
+- CPU notebook A remained **100/100 completed**, notebook B **80/100 in_progress** as an output checkpoint (although the notebook version is `complete`); both checkpoint source SHAs verified against frozen CPU pilot source `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
+- CUDA smoke checkpoint verified with its separately frozen source SHA `d92b5d6054b6f3802d146e5a1662127e61223993`; tiny **untrained** Transformer CUDA inference and restorable weight checkpoint verified against `184a1270aa6aaef8bc0e82c142e3285d0ea82084`.
+- Existing Telegram last-notified ledger matched synthetic CPU 100/100 progress, sanitized message template passed, and completed resume-control ledger caused a **stop/no-duplicate-resume** decision. **No Telegram message was sent**, no Kaggle job submitted and no GPU time used by this run.
+- Immutable MiniLM model provenance metadata and closed execution/data-transfer permission gates were cross-checked; no pretrained weights/tokenizer downloads or actual GPU VRAM feasibility measurements occurred.
+- A small non-sensitive report was saved as seven-day GitHub Actions artifact `synthetic-e2e-readonly-evidence-45488584121` (artifact id `14964628922`). The downloaded synthetic model weight files were **not** re-uploaded in this report.
+- **Limitations:** This was a read-only historical evidence revalidation, not a real all-automatic end-to-end launch cycle. It does not independently prove GitHub cron delivery, live Telegram deliverability, durable autonomous Kaggle resubmission/failure recovery, remaining quota, genuine pretrained medical-model evaluation or E1–E7.

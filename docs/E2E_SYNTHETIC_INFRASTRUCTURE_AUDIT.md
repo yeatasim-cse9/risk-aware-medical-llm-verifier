@@ -25,3 +25,17 @@ Purpose: recheck all completed historic synthetic Kaggle infrastructure experime
 Workflow: `.github/workflows/e2e-readonly-infrastructure-audit.yml`. Script: `scripts/e2e_infrastructure_audit.py`. Tests: `tests/test_e2e_infrastructure_audit.py`.
 
 **Safe operation:** Manual or one-time matching workflow push only. No schedule and no new paid/accelerator compute. The workflow permission is `contents: read`; Telegram secrets are not mounted.
+
+## Verified first live read-only integration
+
+- GitHub Actions run: `45488584121` (**success**).
+- Main repository CI: `45488584172` (**success**).
+- Unit tests: **137 passed**, no failures.
+- Kaggle: CPU A `complete`, CPU B `complete`, GPU smoke `complete`, tiny Transformer `complete`.
+- Independently validated CPU output counts: A `100/100` completed, B `80/100` in progress; completed-task restart guard reports `STOP`.
+- GPU smoke and tiny *untrained* Transformer manifests and on-Kaggle weight-restore verification record passed. Distinct pinned source SHAs matched the existing submitted kernel versions.
+- Persisted private Telegram notification progress ledger `100/100` matched the verified synthetic checkpoint, without sending any new message.
+- Audit log: `E2E_READONLY_AUDIT: FOUR_KAGGLE_NOTEBOOKS_COMPLETE_AND_CHECKPOINTS_VERIFIED`, `E2E_READONLY_AUDIT: NO_GPU_NO_SUBMIT_NO_TELEGRAM`, `E2E_READONLY_AUDIT: CRON_AND_FULL_AUTOMATIC_RESUME_NOT_PROVEN`.
+- Saved sanitized, SHA-256-sealed report as GitHub Actions artifact `synthetic-e2e-readonly-evidence-45488584121` (seven-day retention).
+
+The artifact records only verification flags and frozen non-sensitive source IDs, **not** downloaded Kaggle data or weights. Restricted MedVAL-Bench use and medical E1–E7 studies remain unstarted.
