@@ -1,0 +1,72 @@
+name: Kaggle Idempotent Resume Controller - Read Only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kaggle-idempotent-resume-controller.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: synthetic-kaggle-idempotent-resume-inspect
+  cancel-in-progress: false
+
+jobs:
+  read-only-controller:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source and immutable completion ledger
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: All unit tests including duplicate and failure scenarios
+        run: |
+          python -m compileall -q scripts src tests
+          python -m unittest discover -s tests -v
+      - name: Install pinned Kaggle CLI
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read actual synthetic slot statuses and verify checkpoints
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Missing Kaggle secret"
+            exit 1
+          fi
+          python scripts/idempotent_resume_controller.py \
+            --ledger monitoring/synthetic-resume-control.json \
+            --work-dir build/idempotent-resume
+          echo "IDEMPOTENT_RESUME_LIVE_CHECK: PASS"
+      - name: Inspect accelerator quota endpoint without using GPU
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess
+          try:
+              proc = subprocess.run(
+                  ["kaggle", "quota"], capture_output=True, text=True, timeout=45
+              )
+              if proc.returncode == 0:
+                  print("GPU_TPU_QUOTA_API: READ_ONLY_QUERY_SUCCESS")
+                  print("GPU_NOTEBOOK_STARTED: NO")
+              else:
+                  # The CLI can change; do not infer that the account lacks quota.
+                  print("GPU_TPU_QUOTA_API: QUERY_UNAVAILABLE_OR_UNSUPPORTED")
+          except Exception:
+              print("GPU_TPU_QUOTA_API: QUERY_UNAVAILABLE_OR_UNSUPPORTED")
+          print("CPU_QUOTA: NOT_INFERRED_FROM_ACCELERATOR_QUOTA")
+          PY
