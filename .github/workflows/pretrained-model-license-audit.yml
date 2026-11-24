@@ -1,0 +1,34 @@
+name: Pretrained Medical Model License Audit - No Downloads
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/pretrained-model-license-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review-only:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout source safely without Git credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Confirm audit validation and safety tests
+        run: |
+          python -m unittest discover -s tests -p test_pretrained_model_audit.py -v
+          python scripts/audit_pretrained_models.py
+      - name: Confirm no external GPU or model actions run
+        run: |
+          echo "MODEL_CARD_AUDIT_ONLY_NO_MODEL_WEIGHTS_DOWNLOADED"
+          echo "MODEL_CARD_AUDIT_ONLY_NO_GPU_SESSION_SUBMITTED"
