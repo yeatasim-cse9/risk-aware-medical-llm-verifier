@@ -102,3 +102,11 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - Independent read-only verification run `45484283016`: Kaggle reported remote notebook `complete`. Downloaded its saved synthetic checkpoint, verified SHA-256 integrity and frozen source SHA, and validated CUDA matrix calculation. Logs contain `VERIFIED_PRIVATE_GPU_SMOKE: CUDA_MATRIX_OK`, `VERIFIED_PRIVATE_GPU_SMOKE: SOURCE_SHA_MATCHED` and `GPU_SMOKE_REMOTE_CHECKPOINT_VERIFIED`.
 - A non-sensitive 7-day GitHub Actions artifact `verified-gpu-smoke-45484283016` was saved. The private GPU notebook is separate from CPU A/B. No medical dataset, MedVAL-Bench, real LLM or model weights were involved.
 - **Confirmed:** GPU-enabled private Kaggle notebook can execute PyTorch CUDA computation and return an integrity-validated synthetic checkpoint to GitHub. **Not confirmed:** inference/training on a medical model, accurate remaining weekly GPU quota, GPU resume across sessions, or full scientific E1–E7 evaluation.
+
+## Step 10.5B — Tiny Transformer GPU inference prepared and safely preflighted
+
+- GitHub Actions run `45485423732` **success**: eight offline unit tests passed; Kaggle GPU quota endpoint accessible; new private notebook `yeatasimbillah/medical-llm-gpu-inference-pilot` reported `missing` (not yet submitted).
+- The notebook source builds a tiny randomly initialized one-layer Transformer Encoder with a synthetic 3-class prediction head. It performs actual CUDA forward inference on four synthetic token sequences, saves model weights, reloads them for comparison and persists a source-pinned SHA256 result manifest. It has **no pretrained medical weights or medically meaningful labels**.
+- Metadata requires private GPU notebook, internet disabled and no input datasets/models/kernels/competitions. Original CPU A/B and GPU smoke notebooks remain unchanged.
+- **No GPU time consumed by this preflight.** Next step is a distinct, explicitly approved one-time user-initiated Kaggle GPU submission; any claim of successful inference awaits downloaded Kaggle output and independent verification.
+- Expected fixed documentation and workflow: `docs/TINY_GPU_INFERENCE_RUNBOOK.md`, `.github/workflows/kaggle-tiny-gpu-inference.yml`.
