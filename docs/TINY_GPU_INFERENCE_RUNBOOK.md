@@ -29,3 +29,13 @@ For later verification, use operation=verify and supply the full TINY_GPU_INFERE
 ## Scientific boundary
 
 Passing this test proves only that a small randomly initialized Transformer can perform CUDA inference, restore saved weights and produce verified non-sensitive outputs. It does not test model accuracy, pretrained checkpoints, tokenization of medical text, evidence retrieval, clinical hallucination detection, E1–E7, or unrestricted GPU availability. Those are separate, license-audited research stages.
+
+## Verified real execution — November 25, 2026 (Bangladesh)
+
+- User-confirmed, one-time GPU submission: GitHub run `45485785310`; Kaggle kernel version 1 pushed successfully.
+- Frozen submission SHA: `184a1270aa6aaef8bc0e82c142e3285d0ea82084`.
+- Independent read-only verifier: GitHub run `45485964322`, success. Kaggle status `complete`; downloaded `tiny-transformer-inference.json` plus `tiny-transformer-weights.pt` and validated both. The checkpoint reports an on-Kaggle CUDA reload comparison, also bounded by manifest validation.
+- Verified success messages: `TINY_GPU_MODEL_REMOTE_INFERENCE_VERIFIED`, `TINY_GPU_MODEL_CHECKPOINT_AND_RESTORE_VERIFIED`, `TINY_GPU_MODEL_SOURCE_COMMIT_MATCHED`.
+- GitHub Actions artifact `verified-tiny-gpu-inference-45485964322` (seven-day retention).
+
+**Do not submit to this same Kaggle notebook again.** The synthetic infrastructure proof is complete. Future scientific experiments require pretrained model license review, approved datasets, frozen evaluation protocol, and independent error analysis.

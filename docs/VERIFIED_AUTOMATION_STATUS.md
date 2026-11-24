@@ -110,3 +110,11 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - Metadata requires private GPU notebook, internet disabled and no input datasets/models/kernels/competitions. Original CPU A/B and GPU smoke notebooks remain unchanged.
 - **No GPU time consumed by this preflight.** Next step is a distinct, explicitly approved one-time user-initiated Kaggle GPU submission; any claim of successful inference awaits downloaded Kaggle output and independent verification.
 - Expected fixed documentation and workflow: `docs/TINY_GPU_INFERENCE_RUNBOOK.md`, `.github/workflows/kaggle-tiny-gpu-inference.yml`.
+
+## Step 10.5B — First private GPU Transformer inference and checkpoint restored
+
+- Kaggle submit workflow run `45485785310` completed successfully: version 1 of private `yeatasimbillah/medical-llm-gpu-inference-pilot` pushed under frozen source SHA `184a1270aa6aaef8bc0e82c142e3285d0ea82084` with explicit user approval.
+- Independent GitHub verification run `45485964322` succeeded: Kaggle remote status `complete`; stored inference outputs and weights independently downloaded; verifier confirmed correct manifest, softmax probabilities, predicted classes, saved weights SHA-256, source SHA and recorded restore comparison. Log: `TINY_GPU_MODEL_REMOTE_INFERENCE_VERIFIED`, `TINY_GPU_MODEL_CHECKPOINT_AND_RESTORE_VERIFIED`, `TINY_GPU_MODEL_SOURCE_COMMIT_MATCHED`, `TINY_GPU_MODEL_REMOTE_CHECKPOINT_VERIFIED`.
+- GitHub Actions artifact `verified-tiny-gpu-inference-45485964322` retained for seven days, containing **only synthetic** inference manifest and untrained randomly initialized weights. Original CPU pilot and GPU CUDA smoke notebook were not overwritten.
+- Relevant CI `45485964364` passed. No second GPU job was launched by independent verification.
+- **Scope limit:** This is a toy one-layer PyTorch Transformer with 4 synthetic token sequences and 3 synthetic output classes; it is not a pretrained medical model, nor a hallucination detection, clinical or E1–E7 experiment. Scientific quality and actual remaining weekly accelerator quota are unknown.
