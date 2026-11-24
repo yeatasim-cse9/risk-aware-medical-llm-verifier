@@ -1,0 +1,56 @@
+name: Step 10.5E Read Only End-to-End Synthetic Infrastructure Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/e2e-readonly-infrastructure-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: synthetic-infrastructure-readonly-e2e
+  cancel-in-progress: false
+
+jobs:
+  verify-historical-evidence:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source and synthetic-only ledgers
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Check security tests and existing repository code
+        run: |
+          python -m compileall -q scripts src tests
+          python -m unittest discover -s tests -v
+      - name: Install pinned Kaggle client (no Kaggle submission)
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Independently fetch and validate four completed private synthetic Kaggle outputs
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Kaggle API token missing"
+            exit 1
+          fi
+          python scripts/e2e_infrastructure_audit.py \
+            --work-dir build/e2e-readonly/output \
+            --report build/e2e-readonly/synthetic-e2e-report.json
+      - name: Save small sanitized infrastructure evidence report
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-e2e-readonly-evidence-${{ github.run_id }}
+          path: build/e2e-readonly/synthetic-e2e-report.json
+          if-no-files-found: error
+          retention-days: 7
