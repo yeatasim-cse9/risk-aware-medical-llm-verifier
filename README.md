@@ -26,7 +26,8 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - ✅ GitHub Actions → Kaggle API authentication; live preflight; private CPU notebook **Version 1** successfully launched remotely; saved 40/100 synthetic task checkpoint returned and validated by GitHub Actions.
 - ✅ Remote **three-session** synthetic checkpoint continuation verified: slot A v1 `40/100` → slot B v1 `80/100` → slot A v2 `100/100`, all checkpoint outputs independently downloaded and integrity validated using pinned Git commit `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
 - ✅ Kaggle → GitHub → Telegram verified synthetic checkpoint notification, and a **scheduled synthetic-only monitor** with a persistent, non-sensitive ledger; duplicate 100/100 notification suppression verified in GitHub Actions run `45479386760`.
-- ⏳ **Unattended multi-session relaunch**, quota/failure recovery and real E1–E7 scientific experiments are **not yet deployed or verified**. GitHub cron timing is best-effort.
+- ✅ Step 10.4A–C read-only Kaggle A/B resume guards verified: trusted checkpoints, a CPU quota-unknown safety stop, cooldown/backoff policy tests, duplicate-reservation prevention and failure-recovery state-machine simulations; `kaggle quota` accelerator query succeeded without using GPU time.
+- ⏳ **Actual unattended multi-session dispatch**, live CPU quota proof, durable submitted-intent persistence, real GPU model jobs and E1–E7 scientific experiments are **not yet deployed or verified**. GitHub cron timing is best-effort.
 
 ## Repository map
 

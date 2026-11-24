@@ -78,3 +78,12 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - Deterministic Python unit tests passed for unknown quota, 6-hour cooldown, 12-hour post-failure backoff, 2 consecutive failures requiring review, rolling 24-hour 2-attempt local cap, stale attestation, missing/untrusted history, active runs and 100/100 stop.
 - Conservative thresholds are **local safeguards only**, not Kaggle-declared quota limits. No CPU remaining quota was measured or inferred from GPU/TPU reporting.
 - No Kaggle job submitted or Telegram message sent. This **does not** enable automatic resume; an independently verified quota/attempt record, durable launch locking and failure recovery remain future work.
+
+## Step 10.4C — idempotent resume-intent and failure-recovery checks
+
+- GitHub Actions run `45481990075` **success**; source patch CI `45481902118` and workflow-change CI `45481989881` both **success**.
+- Checked private Kaggle A and B remotely, with SHA-verified snapshots **A 100/100 completed** and **B 80/100 in_progress**. Observed `IDEMPOTENT_RESUME_CONTROLLER: STOP ALREADY_COMPLETE_DUPLICATE_SUBMISSION_BLOCKED`.
+- Pure state-machine tests cover unique resume intent, repeated reservation, stale checkpoints, competing claims, CAS conflicts, an attempted-submit marker before pushing, recovery requiring manual review, and verified 40→80→100 reconciliation.
+- Tested `kaggle quota` read-only: output `GPU_TPU_QUOTA_API: READ_ONLY_QUERY_SUCCESS`. This confirms query access but **does not prove how many GPU hours remain**. No GPU session was launched.
+- A simulated quota-unknown/retry case cannot initiate a new Kaggle job. The production CLI is **read-only**: no live durable claim API integration, no automatic external submission, and no global exactly-once delivery guarantee. Existing manual controller is separate and must not be mistaken for idempotent unattended dispatch.
+- The first two development commits exposed test failures; they were fixed and superseded by the successful runs above.
