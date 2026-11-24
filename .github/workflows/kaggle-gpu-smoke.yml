@@ -1,0 +1,144 @@
+name: Kaggle Private GPU Smoke Controller
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "preflight (default), prepare, submit, status, or verify"
+        type: choice
+        options: [preflight, prepare, submit, status, verify]
+        default: preflight
+        required: true
+      confirm_gpu_quota:
+        description: "For submit only: I reviewed Kaggle GPU quota and approve ONE GPU notebook"
+        type: boolean
+        default: false
+        required: false
+      source_commit:
+        description: "For verify: full frozen Git SHA from the submit run (otherwise leave blank)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kaggle-private-gpu-smoke-controller
+  cancel-in-progress: false
+
+jobs:
+  gpu-controller:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source for this GPU version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.operation == 'verify' && inputs.source_commit || github.sha }}
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run GPU smoke safety unit tests
+        run: |
+          python -m compileall -q scripts tests
+          python -m unittest discover -s tests -p test_gpu_smoke.py -v
+      - name: Prepare private synthetic GPU notebook
+        if: inputs.operation == 'prepare' || inputs.operation == 'submit'
+        run: |
+          python scripts/build_gpu_smoke.py --commit "$(git rev-parse HEAD)" --out build/gpu-smoke
+          python -m py_compile build/gpu-smoke/runner.py
+      - name: Upload GPU package without any secrets
+        if: inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-gpu-smoke-source-${{ github.run_id }}
+          path: build/gpu-smoke/
+          retention-days: 7
+      - name: Install pinned Kaggle client
+        if: inputs.operation != 'prepare'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::KAGGLE_API_TOKEN missing"
+            exit 1
+          fi
+          python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Query accelerator quota without consuming GPU time
+        if: inputs.operation == 'preflight' || inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if kaggle quota >/dev/null 2>&1; then
+            echo "GPU_QUOTA_ENDPOINT: ACCESS_CONFIRMED"
+            echo "GPU_QUOTA_REMAINING: NOT_INFERRED; check Kaggle account GPU usage manually"
+          else
+            echo "::error::GPU quota endpoint unavailable; no GPU submission authorized"
+            exit 1
+          fi
+      - name: One-time GPU notebook presence check
+        if: inputs.operation == 'preflight' || inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from scripts.kaggle_status import check
+          state = check("yeatasimbillah/medical-llm-gpu-smoke", "any")
+          if state != "missing":
+              raise SystemExit("GPU_SMOKE_SUBMIT_BLOCKED: notebook already exists; no repeat")
+          print("GPU_SMOKE_PREFLIGHT_OK: new private GPU notebook slot available")
+          PY
+      - name: Require explicit approval to consume GPU quota
+        if: inputs.operation == 'submit'
+        env:
+          CONSENT: ${{ inputs.confirm_gpu_quota }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$CONSENT" != "true" ]]; then
+            echo "::error::Check confirm_gpu_quota to approve GPU time consumption"
+            exit 1
+          fi
+          echo "GPU_CONSUMPTION_APPROVED_FOR_ONE_SUBMISSION"
+      - name: Submit ONE private GPU notebook
+        if: inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GPU_SMOKE_FROZEN_SOURCE: $(git rev-parse HEAD)"
+          kaggle kernels push -p build/gpu-smoke
+      - name: Read-only Kaggle GPU status
+        if: inputs.operation == 'status'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/kaggle_status.py yeatasimbillah/medical-llm-gpu-smoke --require any
+      - name: Independently verify completed remote CUDA result
+        if: inputs.operation == 'verify'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-gpu-smoke --require complete
+          mkdir -p build/gpu-result
+          kaggle kernels output yeatasimbillah/medical-llm-gpu-smoke -p build/gpu-result
+          python scripts/verify_gpu_smoke.py build/gpu-result --expected-commit "$(git rev-parse HEAD)"
+          echo "GPU_SMOKE_REMOTE_CHECKPOINT_VERIFIED"
+      - name: Retain verified non-sensitive GPU result
+        if: inputs.operation == 'verify' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-private-gpu-smoke-${{ github.run_id }}
+          path: build/gpu-result/checkpoints/gpu-smoke-result.json
+          retention-days: 7

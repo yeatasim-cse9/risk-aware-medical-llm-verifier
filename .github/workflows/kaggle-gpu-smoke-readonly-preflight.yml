@@ -1,0 +1,62 @@
+name: Kaggle GPU Smoke Read Only Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kaggle-gpu-smoke-readonly-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Validate GPU build with offline synthetic tests
+        run: |
+          python -m unittest discover -s tests -p test_gpu_smoke.py -v
+          python scripts/build_gpu_smoke.py --commit "$(git rev-parse HEAD)" --out build/gpu-smoke
+          python -m py_compile build/gpu-smoke/runner.py
+      - name: Check Kaggle API secret
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Missing KAGGLE_API_TOKEN"
+            exit 1
+          fi
+      - name: Pinned Kaggle CLI
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read-only GPU quota and notebook slot check
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if kaggle quota > /dev/null 2>&1; then
+            echo "GPU_QUOTA_ENDPOINT: ACCESS_CONFIRMED"
+          else
+            echo "::error::Accelerator quota API unavailable"
+            exit 1
+          fi
+          python - <<'PY'
+          from scripts.kaggle_status import check
+          state = check("yeatasimbillah/medical-llm-gpu-smoke", "any")
+          if state == "missing":
+              print("GPU_SMOKE_SLOT: MISSING; user may manually authorize one submit")
+          else:
+              print("GPU_SMOKE_SLOT: ALREADY_EXISTS; do not submit again")
+          print("GPU_CONSUMED_BY_THIS_PREFLIGHT: ZERO")
+          PY
