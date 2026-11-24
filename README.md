@@ -23,7 +23,8 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - ✅ Public GitHub repository and initial manual GitHub Actions CPU smoke test.
 - ✅ Human-guided Kaggle CPU checkpoint and cross-notebook resume demonstration (separate UI notebooks).
 - ✅ Version-controlled **synthetic** CPU pilot runner, integrity checks, unit tests, a credential-free Kaggle submission builder, and manual Kaggle controller workflows.
-- ⏳ Kaggle API token, Telegram bot secrets, API launch/monitoring tests, automatic session chaining, real E1–E7 datasets/models and scientific experiments are **not deployed**.
+- ✅ GitHub Actions → Kaggle API authentication; live preflight; private CPU notebook **Version 1** successfully launched remotely; saved 40/100 synthetic task checkpoint returned and validated by GitHub Actions.
+- ⏳ Second/third-session remote resume (40→80→100), unattended chained submission, Telegram notification secrets, and real E1–E7 scientific experiments are **not deployed or verified**.
 
 ## Repository map
 
@@ -32,7 +33,8 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - `scripts/verify_checkpoint.py`: sanity and integrity checks on returned synthetic output.
 - `tests/`: local and GitHub Actions unit tests.
 - `.github/workflows/research-ci.yml`: automatic basic CI on push / PR.
-- `.github/workflows/kaggle-cpu-pilot.yml`: **manual** prepare / submit / status / collect for synthetic-only experiment.
+- `.github/workflows/kaggle-cpu-pilot.yml`: **manual** prepare / auth-check / preflight / submit / status / collect for synthetic-only experiment.
+- `.github/workflows/kaggle-readonly-preflight.yml`: read-only live Kaggle preflight on matching `main` source changes; no notebook submission.
 - `configs/experiment-registry.json`: proposal-derived E1–E7 plan.
 - `docs/`: security rules, reproducibility contract, operational instructions.
 

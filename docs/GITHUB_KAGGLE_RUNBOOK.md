@@ -7,7 +7,7 @@
 - `Kaggle CPU Pilot Controller` is **manual-only** and starts with a credential-free `prepare` operation.
 - The synthetic Kaggle worker is self-contained, uses no medical data, and executes up to **40 of 100** deterministic tasks per session.
 - Two private CPU notebook slots are defined: `yeatasimbillah/medical-llm-cpu-auto-a` and `...-b`.
-- **Automatic unattended re-launch is NOT deployed**. Resume, secret setup, and Kaggle/API validation remain separate stages.
+- **Automatic unattended re-launch is NOT deployed**. Kaggle API authentication, live preflight, first remote CPU-only launch, first saved output download and checkpoint validation have now been verified. Second-session remote resume remains unverified.
 
 ## First credential-free check
 
@@ -37,4 +37,24 @@ Manual controller mode is intentionally a safety gate. It does not yet provide s
 
 ## Guardrail on remote submit
 
-A live Kaggle status preflight now refuses an active or failed target slot. Resume also requires the opposite slot to be marked complete, downloads and integrity-checks its synthetic checkpoint, and confirms its immutable source commit matches the new submission. Unknown CLI statuses fail closed. This has unit-test coverage but **has not yet been validated against this Kaggle account's live API**.
+A live Kaggle status preflight now refuses an active or failed target slot. Resume also requires the opposite slot to be marked complete, downloads and integrity-checks its synthetic checkpoint, and confirms its immutable source commit matches the new submission. Unknown CLI statuses fail closed. The empty-result handling has **passed live read-only Kaggle API preflight**; duplicate/active-target guard remains fail-closed.
+
+## Verified GitHub → Kaggle remote CPU proof (2026-11-25, Bangladesh local date)
+
+- Source Git commit used for first remote kernel: `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`
+- Live Kaggle read-only preflight: GitHub Actions run `45471346800`, completed successfully.
+- First remote Kaggle CPU-only private script submission: GitHub Actions run `45471589845`, Kaggle notebook `yeatasimbillah/medical-llm-cpu-auto-a`, **version 1 successfully pushed**.
+- Read-only remote completion and output retrieval: GitHub Actions run `45471757482`, **complete**, checkpoint `cpu-pilot-automation.json` validated at **40 / 100** simulated task IDs, with checksum and exact source commit match.
+- This validates initial remote job launch and persistent Kaggle saved output. **It does not yet validate cross-session remote resume, automated restart, Telegram messages, or actual medical experiments.**
+
+### IMPORTANT: frozen commit for next manual resumed session
+
+When testing slot B after successful slot A, run **GitHub Actions → Kaggle CPU Pilot Controller → Run workflow**:
+- `operation = submit`
+- `slot = b`
+- `resume = true`
+- `source_commit = 1a90191ae2734a74807eb53fa7d5b27a4e44c78f`
+
+Do **not** leave `source_commit` empty on this particular resume test: a newer HEAD commit would cause intentional checkpoint provenance mismatch. The controller should preflight B as absent, verify A complete, download the A checkpoint, and attach A as an input to B. Never send medical records through this pilot.
+
+Do not repeat the first-launch one-time workflow. It was removed after the successful run to prevent accidental duplicate submissions.
