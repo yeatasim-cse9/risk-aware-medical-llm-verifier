@@ -1,0 +1,31 @@
+name: Research Repository CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Python syntax and unit tests
+        run: |
+          python -m compileall -q src scripts tests
+          python -m unittest discover -s tests -v
+      - name: Build dry-run CPU Kaggle submission without credentials
+        run: |
+          python scripts/build_kernel.py --commit "${GITHUB_SHA}" --slot a --out build/kaggle
+          python -m py_compile build/kaggle/runner.py
+          python -c "import json; d=json.load(open('build/kaggle/kernel-metadata.json')); assert d['enable_gpu'] is False and d['enable_internet'] is False and d['is_private'] is True"

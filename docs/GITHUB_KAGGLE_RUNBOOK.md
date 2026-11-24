@@ -1,0 +1,35 @@
+# GitHub → Kaggle CPU Pilot: safe operations
+
+## What is already configured
+
+- `Research Repository CI` runs Python unit tests on new `main` commits and pull requests.
+- `Research CPU Smoke Test` runs manually.
+- `Kaggle CPU Pilot Controller` is **manual-only** and starts with a credential-free `prepare` operation.
+- The synthetic Kaggle worker is self-contained, uses no medical data, and executes up to **40 of 100** deterministic tasks per session.
+- Two private CPU notebook slots are defined: `yeatasimbillah/medical-llm-cpu-auto-a` and `...-b`.
+- **Automatic unattended re-launch is NOT deployed**. Resume, secret setup, and Kaggle/API validation remain separate stages.
+
+## First credential-free check
+
+GitHub **Actions → Kaggle CPU Pilot Controller → Run workflow**.
+Choose `operation=prepare`, `slot=a`, `resume=false`. Download the resulting `cpu-pilot-source-...` artifact to inspect `runner.py` and `kernel-metadata.json`. This builds but **does not submit** a Kaggle job.
+
+## When ready for Kaggle API access
+
+The account owner creates a Kaggle API token privately and stores it as the GitHub Actions repository secret named **`KAGGLE_API_TOKEN`**. Do not add it to a public repository, share it in chat, or print it in logs.
+The `Kaggle CPU Pilot Controller` can then run:
+- `operation=submit, slot=a, resume=false` to submit first CPU-only session;
+- `operation=status, slot=a` to inspect Kaggle's status;
+- `operation=collect, slot=a` only after a successful saved run, to validate and download synthetic checkpoint as a short-lived private GitHub Actions artifact.
+
+For a second session only after inspecting slot A's output, select `submit, slot=b, resume=true`. The Kaggle metadata attaches A's output using `kernel_sources`. After success, alternate the slots to avoid self-dependency. Always check one source is attached and that both versions use the same `source_commit`; otherwise the worker fails closed. **Do not submit before the previous version has completed and its outputs are available.**
+
+To reproduce a run after new commits, supply the *same 40-character source commit SHA* through the workflow's `source_commit` input.
+
+## Optional notifications
+
+If desired, add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` via GitHub Actions Secrets. The controller sends only status labels (submitted / checked / collected / failed), not medical content. Secrets are never placed in the repository. Missing Telegram secrets simply skip notifications.
+
+## Limitations
+
+Manual controller mode is intentionally a safety gate. It does not yet provide scheduled polling, quota-aware backoff, guaranteed zero-cost completion, automated A/B resubmission, or end-to-end remote verification. GitHub Actions can finish while Kaggle continues running, and public GitHub artifacts must never contain restricted datasets. Enable unattended re-launch only after a live CPU API test demonstrates reliable run-state detection, persistent checkpoint round-trip, quota compliance, and API error handling.

@@ -1,22 +1,30 @@
-﻿# Python
+# Python and local environments
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
 
-# Secrets
+# Secrets and tokens
 .env
 .env.*
 !.env.example
 kaggle.json
+.kaggle/
 *.pem
 *.key
+*.secret
 
-# Research data and checkpoints
+# Protected / local research datasets and outputs
 data/
 checkpoints/
 outputs/
 artifacts/
+build/
+results/
+private/
+restricted/
 
 # Jupyter
 .ipynb_checkpoints/

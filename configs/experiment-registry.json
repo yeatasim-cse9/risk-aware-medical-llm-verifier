@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "status": "planned-no-real-experiments-executed",
+  "source": "Official thesis proposal",
+  "research_title": "Risk-Aware Evidence-Grounded Verification for Detecting and Reducing Hallucinations in Medical LLM Responses",
+  "experiments": [
+    {
+      "id": "E1",
+      "name": "Baseline detection",
+      "dataset": "MedHallu",
+      "environment": "Kaggle CPU or GPU after benchmark",
+      "cloud_allowed": "subject to license",
+      "status": "planned"
+    },
+    {
+      "id": "E2",
+      "name": "Retrieval-free judge",
+      "dataset": "MedVAL-Bench v1.0.1",
+      "environment": "Approved restricted-data environment",
+      "cloud_allowed": false,
+      "status": "planned"
+    },
+    {
+      "id": "E3",
+      "name": "Retrieval + NLI",
+      "dataset": "MedVAL-Bench v1.0.1",
+      "environment": "Approved restricted-data environment",
+      "cloud_allowed": false,
+      "status": "planned"
+    },
+    {
+      "id": "E4",
+      "name": "Hybrid verifier",
+      "dataset": "MedVAL-Bench v1.0.1",
+      "environment": "Approved restricted-data environment",
+      "cloud_allowed": false,
+      "status": "planned"
+    },
+    {
+      "id": "E5",
+      "name": "External generalization",
+      "dataset": "BioASQ 14b",
+      "environment": "Kaggle after access/licensing review",
+      "cloud_allowed": "conditional",
+      "status": "planned"
+    },
+    {
+      "id": "E6",
+      "name": "Hallucination reduction",
+      "dataset": "BioASQ 14b generated responses",
+      "environment": "Kaggle after access/licensing review",
+      "cloud_allowed": "conditional",
+      "status": "planned"
+    },
+    {
+      "id": "E7",
+      "name": "Ablation study",
+      "dataset": "MedVAL or BioASQ depending on protocol",
+      "environment": "Restricted for MedVAL; Kaggle for permitted public data",
+      "cloud_allowed": "dataset-specific",
+      "status": "planned"
+    }
+  ],
+  "evidence_corpora": [
+    "PubMed 2026 baseline (planned subset/index)",
+    "DailyMed (planned versioned labels)"
+  ],
+  "metrics": [
+    "macro-F1",
+    "per-class precision/recall/F1",
+    "AUROC",
+    "AUPRC",
+    "ECE",
+    "Brier Score",
+    "Recall@5",
+    "Recall@10",
+    "MRR",
+    "Evidence Hit Rate",
+    "severity-weighted false-negative rate",
+    "high-risk error recall",
+    "risk-coverage curve",
+    "hallucination reduction",
+    "preservation of correct claims",
+    "95% bootstrap CI"
+  ]
+}
