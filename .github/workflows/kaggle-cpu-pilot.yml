@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "Prepare requires no credentials; submit/status/collect require a Kaggle secret"
+        description: "Prepare builds locally; auth-check tests Kaggle secret without launching a notebook"
         type: choice
-        options: [prepare, submit, status, collect]
+        options: [prepare, auth-check, submit, status, collect]
         default: prepare
         required: true
       slot:
@@ -110,6 +110,16 @@ jobs:
           set -euo pipefail
           KERNEL="yeatasimbillah/medical-llm-cpu-auto-$SLOT"
           case "$OP" in
+            auth-check)
+              # Query the authenticated user's own notebooks without printing names.
+              # A successful request validates API access, not notebook execution.
+              if kaggle kernels list --mine >/dev/null 2>&1; then
+                echo "KAGGLE API AUTH CHECK SUCCESSFUL"
+              else
+                echo "::error::Kaggle API authentication check failed. Verify the token and Kaggle CLI."
+                exit 1
+              fi
+              ;;
             submit)
               echo "Submitting a private CPU-only synthetic notebook: $KERNEL"
               kaggle kernels push -p build/kaggle
@@ -135,7 +145,7 @@ jobs:
           path: build/output/
           retention-days: 14
       - name: Optional status-only Telegram notification
-        if: always() && inputs.operation != 'prepare'
+        if: always() && inputs.operation != 'prepare' && inputs.operation != 'auth-check'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
