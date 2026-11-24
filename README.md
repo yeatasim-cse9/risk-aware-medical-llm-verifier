@@ -31,6 +31,7 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - ✅ First isolated private Kaggle GPU smoke test executed remotely and independently verified: CUDA matrix result, SHA-256 checkpoint integrity and pinned code provenance in GitHub Actions run `45484283016`.
 - ✅ Step 10.5B tiny, untrained Transformer GPU inference and restorable weights code prepared with no medical data or external downloads. Read-only GPU notebook preflight and all 8 new safety tests verified in run `45485423732`. GPU inference job **not yet launched**.
 - ✅ First actual CUDA inference on an **untrained synthetic Transformer**, plus saved/reloaded model state and independent checkpoint integrity/provenance verification, confirmed in GitHub Actions run `45485964322`.
+- ✅ Step 10.5C source-linked **model-card license metadata** shortlist: MiniLM retrieval (Apache-2.0), MiniLM NLI (Apache-2.0), Microsoft BiomedBERT (MIT); all 8 offline audit safety tests and GitHub run `45486737054` passed. **No model weights acquired or model licenses fully cleared; no GPU use**.
 - ⏳ **Actual unattended multi-session dispatch**, live CPU quota proof, durable submitted-intent persistence, pretrained medical-model evaluation and E1–E7 scientific experiments are **not yet deployed or verified**. GitHub cron timing is best-effort.
 
 ## Repository map

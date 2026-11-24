@@ -118,3 +118,11 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - GitHub Actions artifact `verified-tiny-gpu-inference-45485964322` retained for seven days, containing **only synthetic** inference manifest and untrained randomly initialized weights. Original CPU pilot and GPU CUDA smoke notebook were not overwritten.
 - Relevant CI `45485964364` passed. No second GPU job was launched by independent verification.
 - **Scope limit:** This is a toy one-layer PyTorch Transformer with 4 synthetic token sequences and 3 synthetic output classes; it is not a pretrained medical model, nor a hallucination detection, clinical or E1–E7 experiment. Scientific quality and actual remaining weekly accelerator quota are unknown.
+
+## Step 10.5C — Pretrained biomedical-model selection and declared-license audit
+
+- Official upstream Hugging Face cards inspected on November 25, 2026: `sentence-transformers/all-MiniLM-L6-v2` (embedding baseline, card declares Apache-2.0); `cross-encoder/nli-MiniLM2-L6-H768` (SNLI/MultiNLI three-label NLI baseline, card declares Apache-2.0); `microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract` (biomedical masked-language model, card and LICENSE.md indicate MIT).
+- Saved source links and limitations in `docs/PRETRAINED_MODEL_LICENSE_AUDIT.md`, with strict metadata-only registry at `configs/pretrained-model-audit.json`.
+- GitHub Actions `45486737054` **success**; 8 unit tests plus policy validation passed. Log: `PRETRAINED_MODEL_AUDIT: MODEL_CARD_METADATA_VERIFIED 3_CANDIDATES` and `PRETRAINED_MODEL_AUDIT: NO_GPU_EXECUTION_NO_MODEL_DOWNLOAD`.
+- **All deployment gates remain closed:** upstream model/tokenizer revision and SHA256 not yet frozen; actual weight license notices and downstream distribution rights not fully reviewed; no actual pretrained model VRAM measurement or inference; no authorized model bundle upload and no real dataset use.
+- Earlier Kaggle GPU smoke and tiny untrained Transformer validation are infrastructure evidence only, not medical evidence-grounded evaluation. Restricted MedVAL-Bench has not been uploaded or processed.
