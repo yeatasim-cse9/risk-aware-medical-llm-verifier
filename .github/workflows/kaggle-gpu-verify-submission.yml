@@ -1,0 +1,71 @@
+name: Verify Submitted Private Kaggle GPU Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kaggle-gpu-verify-submission.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-one-time-private-kaggle-gpu
+  cancel-in-progress: false
+
+jobs:
+  verify-gpu:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout independently checked verifier
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run GPU verifier unit tests
+        run: python -m unittest discover -s tests -p test_gpu_smoke.py -v
+      - name: Install pinned Kaggle CLI
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read remote GPU status without consuming accelerator time
+        id: remote
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from scripts.kaggle_status import check
+          status = check("yeatasimbillah/medical-llm-gpu-smoke", "any")
+          print(f"REMOTE_GPU_STATUS: {status.upper()}")
+          if status in {"failed", "error", "cancelled", "cancelacknowledged", "missing"}:
+              raise SystemExit("GPU_REMOTE_NOT_HEALTHY_NO_VERIFICATION")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("complete=" + str(status == "complete").lower() + "\n")
+          if status != "complete":
+              print("GPU_VERIFY_DEFERRED: notebook still running or queued; retry this manual verifier later")
+          PY
+      - name: Download completed GPU checkpoint and prove CUDA
+        if: steps.remote.outputs.complete == 'true'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/verified-gpu
+          kaggle kernels output yeatasimbillah/medical-llm-gpu-smoke -p build/verified-gpu
+          python scripts/verify_gpu_smoke.py build/verified-gpu --expected-commit d92b5d6054b6f3802d146e5a1662127e61223993
+          echo "GPU_SMOKE_REMOTE_CHECKPOINT_VERIFIED"
+      - name: Retain non-sensitive GPU checkpoint
+        if: steps.remote.outputs.complete == 'true' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-gpu-smoke-${{ github.run_id }}
+          path: build/verified-gpu/checkpoints/gpu-smoke-result.json
+          retention-days: 7
