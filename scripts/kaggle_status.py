@@ -1,14 +1,12 @@
-"""Fail-closed Kaggle status preflight for a synthetic CPU pilot.
+"""Fail-closed Kaggle status preflight for the synthetic CPU pilot.
 
-A notebook that has never been created has no status. Check the
-authenticated owner's notebook list first; never confuse an API failure
-with an absent notebook.
+Use the Kaggle CLI's supported JSON listing rather than brittle CSV/text
+header parsing. Unknown responses and API failures never authorize submission.
 """
 from __future__ import annotations
 
 import argparse
-import csv
-import io
+import json
 import re
 import subprocess
 
@@ -19,42 +17,68 @@ TERMINAL = {"complete", "error", "cancelacknowledged", "cancelled", "failed"}
 def parse_status(text: str) -> str:
     match = re.search(
         r'has status\s+["\']?(?:KernelWorkerStatus\.)?([A-Za-z_]+)',
-        text, flags=re.IGNORECASE,
+        text,
+        flags=re.IGNORECASE,
     )
     if not match:
         raise ValueError("Unrecognized Kaggle status format")
-    value = match.group(1).lower()
-    if value not in ACTIVE | TERMINAL:
-        raise ValueError("Unknown Kaggle status; fail closed")
-    return value
+    state = match.group(1).lower()
+    if state not in ACTIVE | TERMINAL:
+        raise ValueError("Unexpected Kaggle notebook status")
+    return state
 
 
-def parse_list(text: str, kernel: str) -> bool:
-    """Check exact owner/slug against successful owner-scoped CSV listing."""
-    text = text.strip()
-    if not text or text.lower() == "no kernels found":
+def parse_kernel_list(text: str, kernel: str) -> bool:
+    """Return true only if an exact kernel ref is returned by JSON listing."""
+    cleaned = text.strip()
+    if not cleaned:
+        # A successful command with empty stdout may mean no results.
+        # The caller must also check stderr is empty.
         return False
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames:
-        raise ValueError("Missing Kaggle CSV header")
-    fields = {f.strip().lower(): f for f in reader.fieldnames}
-    if "ref" not in fields:
-        raise ValueError("Unknown Kaggle CSV format; fail closed")
-    ref_col = fields["ref"]
-    refs = {row[ref_col].strip() for row in reader if row.get(ref_col)}
+    if re.fullmatch(r"No kernels found\.?", cleaned, flags=re.IGNORECASE):
+        return False
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Kaggle CLI did not return JSON notebook list") from exc
+    if not isinstance(data, list):
+        raise ValueError("Unexpected Kaggle JSON notebook list structure")
+    refs = set()
+    for row in data:
+        if not isinstance(row, dict):
+            raise ValueError("Unexpected row in Kaggle JSON notebook list")
+        normalized = {str(k).strip().lower(): v for k, v in row.items()}
+        ref = normalized.get("ref")
+        if not isinstance(ref, str):
+            raise ValueError("Kaggle list entry missing ref")
+        refs.add(ref.strip())
     return kernel in refs
 
 
 def kernel_exists(kernel: str) -> bool:
     owner, sep, slug = kernel.partition("/")
     if not sep or not owner or not slug or "/" in slug:
-        raise ValueError("Expected owner/notebook-slug")
-    cmd = ["kaggle", "kernels", "list", "--mine",
-           "--search", slug, "--csv", "--page-size", "100"]
+        raise ValueError("Expected exact owner/notebook-slug")
+    cmd = [
+        "kaggle", "kernels", "list", "--mine", "--search", slug,
+        "--format", "json", "--page-size", "100",
+    ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
     if proc.returncode != 0:
-        raise RuntimeError("Kaggle notebook listing failed; refusing to submit")
-    return parse_list(proc.stdout, kernel)
+        raise RuntimeError("Kaggle notebook listing failed; refusing to proceed")
+    if proc.stderr.strip():
+        # Do not leak arbitrary remote response or credentials in logs.
+        raise RuntimeError("Kaggle CLI produced unexpected listing diagnostics")
+    try:
+        return parse_kernel_list(proc.stdout, kernel)
+    except ValueError as exc:
+        # Deliberately non-sensitive diagnostic: helps future debugging,
+        # without revealing notebook names, credentials or raw CLI output.
+        print(
+            f"Unexpected notebook list format (characters={len(proc.stdout)}); "
+            "submission blocked."
+        )
+        raise
 
 
 def check(kernel: str, require: str) -> str:
