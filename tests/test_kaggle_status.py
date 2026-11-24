@@ -17,6 +17,21 @@ class KaggleStatusTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_status("Unexpected response")
 
+    def test_empty_csv_header_is_missing(self):
+        self.assertFalse(parse_kernel_list("ref,title\n", "user/target"))
+        self.assertFalse(parse_kernel_list("ref,title", "user/target"))
+        self.assertFalse(parse_kernel_list("ref,title,author,lastRunTime,totalVotes\n", "user/target"))
+
+    def test_csv_list_exact_reference(self):
+        self.assertTrue(parse_kernel_list("ref,title\nuser/target,Pilot\n", "user/target"))
+        self.assertFalse(parse_kernel_list("ref,title\nuser/target-else,Other\n", "user/target"))
+
+    def test_invalid_text_not_treated_as_absent(self):
+        for value in ("Access denied", "ref", "No kernels found today", "ref,wrong"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    parse_kernel_list(value, "user/target")
+
     def test_empty_json_list_is_missing(self):
         self.assertFalse(parse_kernel_list("[]", "user/target"))
         self.assertFalse(parse_kernel_list("", "user/target"))

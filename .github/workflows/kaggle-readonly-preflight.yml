@@ -1,0 +1,39 @@
+name: Kaggle Read-only Live Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/kaggle_status.py
+      - .github/workflows/kaggle-readonly-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout verified main
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install pinned Kaggle CLI
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read-only Kaggle status check
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Kaggle API Token is missing"
+            exit 1
+          fi
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-cpu-auto-a --require not-active
+          echo "READONLY KAGGLE PREFLIGHT OK"

@@ -6,6 +6,9 @@ header parsing. Unknown responses and API failures never authorize submission.
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
+import io
 import json
 import re
 import subprocess
@@ -29,18 +32,33 @@ def parse_status(text: str) -> str:
 
 
 def parse_kernel_list(text: str, kernel: str) -> bool:
-    """Only treat exact no-results sentinels or empty JSON as missing."""
+    """Detect an exact Kaggle notebook ref from JSON or CSV listings.
+
+    Some Kaggle CLI versions produce an empty CSV header even when
+    format=json was requested. A failed API call never implies absence.
+    """
     cleaned = text.strip()
-    if not cleaned:
-        # A successful command with empty stdout may mean no results.
-        # The caller must also check stderr is empty.
+    if not cleaned or re.fullmatch(
+        r"No kernels(?: found)?\.?", cleaned, flags=re.IGNORECASE
+    ):
         return False
-    if re.fullmatch(r"No kernels(?: found)?\.?", cleaned, flags=re.IGNORECASE):
-        return False
+
     try:
         data = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise ValueError("Kaggle CLI did not return JSON notebook list") from exc
+    except json.JSONDecodeError:
+        reader = csv.DictReader(io.StringIO(cleaned))
+        fields = reader.fieldnames or []
+        names = {x.strip().lower(): x for x in fields if isinstance(x, str)}
+        if "ref" not in names or "title" not in names or len(fields) < 2:
+            raise ValueError("Unknown Kaggle list format (not JSON or CSV)")
+        ref_col = names["ref"]
+        refs = set()
+        for row in reader:
+            if not row.get(ref_col) or any(key is None for key in row):
+                raise ValueError("Malformed Kaggle CSV notebook listing")
+            refs.add(row[ref_col].strip())
+        return kernel in refs
+
     if not isinstance(data, list):
         raise ValueError("Unexpected Kaggle JSON notebook list structure")
     refs = set()
@@ -53,7 +71,6 @@ def parse_kernel_list(text: str, kernel: str) -> bool:
             raise ValueError("Kaggle list entry missing ref")
         refs.add(ref.strip())
     return kernel in refs
-
 
 def kernel_exists(kernel: str) -> bool:
     owner, sep, slug = kernel.partition("/")
@@ -74,9 +91,10 @@ def kernel_exists(kernel: str) -> bool:
     except ValueError as exc:
         # Deliberately non-sensitive diagnostic: helps future debugging,
         # without revealing notebook names, credentials or raw CLI output.
+        fingerprint = hashlib.sha256(proc.stdout.encode("utf-8")).hexdigest()
         print(
-            f"Unexpected notebook list format (characters={len(proc.stdout)}); "
-            "submission blocked."
+            f"Unexpected notebook list format (characters={len(proc.stdout)}, "
+            f"sha256={fingerprint}); submission blocked."
         )
         raise
 
