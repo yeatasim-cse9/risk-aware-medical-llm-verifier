@@ -21,6 +21,8 @@ class KaggleStatusTests(unittest.TestCase):
         self.assertFalse(parse_kernel_list("[]", "user/target"))
         self.assertFalse(parse_kernel_list("", "user/target"))
         self.assertFalse(parse_kernel_list("No kernels found.", "user/target"))
+        self.assertFalse(parse_kernel_list("No kernels", "user/target"))
+        self.assertFalse(parse_kernel_list("no kernels\n", "user/target"))
 
     def test_exact_ref_required(self):
         self.assertTrue(
@@ -31,7 +33,7 @@ class KaggleStatusTests(unittest.TestCase):
         )
 
     def test_unexpected_json_rejected(self):
-        for text in ('{"status":"OK"}', "An error", '[{"title":"No ref"}]'):
+        for text in ('{"status":"OK"}', "An error", "No kernels found today", '[{"title":"No ref"}]'):
             with self.subTest(text=text):
                 with self.assertRaises(ValueError):
                     parse_kernel_list(text, "user/target")

@@ -29,13 +29,13 @@ def parse_status(text: str) -> str:
 
 
 def parse_kernel_list(text: str, kernel: str) -> bool:
-    """Return true only if an exact kernel ref is returned by JSON listing."""
+    """Only treat exact no-results sentinels or empty JSON as missing."""
     cleaned = text.strip()
     if not cleaned:
         # A successful command with empty stdout may mean no results.
         # The caller must also check stderr is empty.
         return False
-    if re.fullmatch(r"No kernels found\.?", cleaned, flags=re.IGNORECASE):
+    if re.fullmatch(r"No kernels(?: found)?\.?", cleaned, flags=re.IGNORECASE):
         return False
     try:
         data = json.loads(cleaned)
