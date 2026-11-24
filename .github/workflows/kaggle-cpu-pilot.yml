@@ -74,7 +74,7 @@ jobs:
           fi
       - name: Install pinned Kaggle CLI
         if: inputs.operation != 'prepare'
-        run: python -m pip install "kaggle==2.2.4"
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
       - name: Guard against duplicate, failed or unfinished remote runs
         if: inputs.operation == 'submit' || inputs.operation == 'collect'
         shell: bash
