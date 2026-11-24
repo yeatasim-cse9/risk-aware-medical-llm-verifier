@@ -18,16 +18,14 @@ class NotificationError(Exception):
     """Safe diagnostic message with no private values."""
 
 
-def send_test(token: str, chat_id: str) -> None:
+def send_message(token: str, chat_id: str, message: str) -> None:
+    """Send a short status-only text, confirming the expected private recipient."""
     if not token:
         raise NotificationError("MISSING_BOT_TOKEN")
     if not re.fullmatch(r"[1-9][0-9]{0,19}", chat_id):
         raise NotificationError("INVALID_PRIVATE_CHAT_ID")
-    message = (
-        "✅ Medical LLM Research Automation\n"
-        "Test notification delivered from GitHub Actions.\n"
-        "No medical data was sent."
-    )
+    if not isinstance(message, str) or not 1 <= len(message) <= 500:
+        raise NotificationError("INVALID_NOTIFICATION_LENGTH")
     body = urllib.parse.urlencode({
         "chat_id": chat_id,
         "text": message,
@@ -72,6 +70,15 @@ def send_test(token: str, chat_id: str) -> None:
     ):
         raise NotificationError("PRIVATE_RECIPIENT_CONFIRMATION_FAILED")
 
+
+
+def send_test(token: str, chat_id: str) -> None:
+    message = (
+        "✅ Medical LLM Research Automation\n"
+        "Test notification delivered from GitHub Actions.\n"
+        "No medical data was sent."
+    )
+    send_message(token, chat_id, message)
 
 def main() -> int:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
