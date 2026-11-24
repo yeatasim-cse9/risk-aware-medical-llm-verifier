@@ -19,7 +19,7 @@ jobs:
 
       - name: Install pinned Kaggle CLI
         run: |
-          python -m pip install "kaggle==2.2.5"
+          python -m pip install "kaggle==2.2.5" "six==1.17.0"
           kaggle --version
 
       - name: Check account's Kaggle API access
