@@ -27,7 +27,7 @@ class KaggleStatusTests(unittest.TestCase):
         self.assertFalse(parse_kernel_list("ref,title\nuser/target-else,Other\n", "user/target"))
 
     def test_invalid_text_not_treated_as_absent(self):
-        for value in ("Access denied", "ref", "No kernels found today", "ref,wrong"):
+        for value in ("Access denied", "ref", "Not found: permission denied", "No kernels found today", "ref,wrong"):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     parse_kernel_list(value, "user/target")
@@ -36,6 +36,8 @@ class KaggleStatusTests(unittest.TestCase):
         self.assertFalse(parse_kernel_list("[]", "user/target"))
         self.assertFalse(parse_kernel_list("", "user/target"))
         self.assertFalse(parse_kernel_list("No kernels found.", "user/target"))
+        self.assertFalse(parse_kernel_list("Not found\n", "user/target"))
+        self.assertFalse(parse_kernel_list("Not found", "user/target"))
         self.assertFalse(parse_kernel_list("No kernels", "user/target"))
         self.assertFalse(parse_kernel_list("no kernels\n", "user/target"))
 

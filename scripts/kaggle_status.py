@@ -39,7 +39,7 @@ def parse_kernel_list(text: str, kernel: str) -> bool:
     """
     cleaned = text.strip()
     if not cleaned or re.fullmatch(
-        r"No kernels(?: found)?\.?", cleaned, flags=re.IGNORECASE
+        r"(?:No kernels(?: found)?|Not found)\.?", cleaned, flags=re.IGNORECASE
     ):
         return False
 
