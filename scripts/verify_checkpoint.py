@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from research_automation.pilot import CHECKPOINT_NAME, validate  # noqa: E402
 
 
-def verify(directory: Path) -> dict:
+def verify(directory: Path, expected_commit: str | None = None) -> dict:
     matches = list(directory.rglob(CHECKPOINT_NAME))
     if len(matches) != 1:
         raise ValueError(f"Expected exactly one {CHECKPOINT_NAME}; found {len(matches)}")
@@ -27,6 +27,8 @@ def verify(directory: Path) -> dict:
     commit = state["git_commit"]
     if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
         raise ValueError("Invalid source commit")
+    if expected_commit is not None and commit != expected_commit:
+        raise ValueError("Input checkpoint belongs to a different Git commit")
     print(f"VALID CHECKPOINT: {len(state['completed_task_ids'])}/{state['total_tasks']} "
           f"commit={commit} status={state['status']}")
     return state
@@ -35,5 +37,6 @@ def verify(directory: Path) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", type=Path)
+    parser.add_argument("--expected-commit")
     args = parser.parse_args()
-    verify(args.directory)
+    verify(args.directory, args.expected_commit)
