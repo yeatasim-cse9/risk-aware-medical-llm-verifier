@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/kaggle-idempotent-resume-controller.yml
+      # One-shot live inspection on controller workflow updates only.
 
 permissions:
   contents: read
