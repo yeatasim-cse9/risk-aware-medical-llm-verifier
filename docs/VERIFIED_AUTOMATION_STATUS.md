@@ -87,3 +87,11 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - Tested `kaggle quota` read-only: output `GPU_TPU_QUOTA_API: READ_ONLY_QUERY_SUCCESS`. This confirms query access but **does not prove how many GPU hours remain**. No GPU session was launched.
 - A simulated quota-unknown/retry case cannot initiate a new Kaggle job. The production CLI is **read-only**: no live durable claim API integration, no automatic external submission, and no global exactly-once delivery guarantee. Existing manual controller is separate and must not be mistaken for idempotent unattended dispatch.
 - The first two development commits exposed test failures; they were fixed and superseded by the successful runs above.
+
+## Step 10.5A — Private CUDA GPU smoke test ready, read-only preflight verified
+
+- GitHub Actions run `45483180421` succeeded: tested private offline GPU metadata, verified pinned Kaggle CLI authentication, queried accelerator quota endpoint successfully and confirmed the separate GPU notebook `yeatasimbillah/medical-llm-gpu-smoke` is **missing**, therefore no duplicate exists.
+- GitHub CI `45483180468` succeeded, including GPU package compilation and synthetic integrity unit tests.
+- Private metadata uses `enable_gpu=true`, `is_private=true`, `enable_internet=false` and no Kaggle dataset/kernel/model inputs.
+- GPU computation, CUDA availability and remote saved GPU checkpoint **have not yet been verified**; actual one-time Kaggle GPU submission requires explicit user review and `confirm_gpu_quota=true` in the manual controller. No GPU quota was spent by read-only preflight and no exact remaining quota has been claimed.
+- Original CPU pilot and restricted MedVAL-Bench remain untouched.
