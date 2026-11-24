@@ -28,6 +28,7 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - ✅ Kaggle → GitHub → Telegram verified synthetic checkpoint notification, and a **scheduled synthetic-only monitor** with a persistent, non-sensitive ledger; duplicate 100/100 notification suppression verified in GitHub Actions run `45479386760`.
 - ✅ Step 10.4A–C read-only Kaggle A/B resume guards verified: trusted checkpoints, a CPU quota-unknown safety stop, cooldown/backoff policy tests, duplicate-reservation prevention and failure-recovery state-machine simulations; `kaggle quota` accelerator query succeeded without using GPU time.
 - ✅ Private, offline Kaggle GPU smoke package built and unit-tested; GPU quota endpoint and empty separate GPU notebook slot confirmed read-only in GitHub Actions run `45483180421`. GPU submission still requires manual approval.
+- ✅ First isolated private Kaggle GPU smoke test executed remotely and independently verified: CUDA matrix result, SHA-256 checkpoint integrity and pinned code provenance in GitHub Actions run `45484283016`.
 - ⏳ **Actual unattended multi-session dispatch**, live CPU quota proof, durable submitted-intent persistence, real GPU model jobs and E1–E7 scientific experiments are **not yet deployed or verified**. GitHub cron timing is best-effort.
 
 ## Repository map

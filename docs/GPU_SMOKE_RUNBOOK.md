@@ -21,3 +21,13 @@ After Kaggle completes, use operation=verify with source_commit set to the full 
 The GPU script uses Kaggle's preinstalled torch (no pip or internet). It runs a tiny exact-value tensor calculation and saves checkpoints/gpu-smoke-result.json. It requires CUDA, records torch/GPU version information and checksums the result. It does not download datasets or contact third-party services.
 
 Quota API accessibility is only a query, not evidence that GPU hours remain; user checks their account usage. This is a one-time manual smoke stage, not unattended GPU training or full thesis experiment automation. Do not submit restricted MedVAL-Bench to unauthorized Kaggle.
+
+## First verified execution — November 25, 2026 (Bangladesh)
+
+- GPU submit GitHub run: `45483951593` — success, private Kaggle notebook version 1 submitted.
+- Frozen submission SHA: `d92b5d6054b6f3802d146e5a1662127e61223993`.
+- Kaggle status: `complete` in independent GitHub verification run `45484283016`.
+- Exact observed checks: `VERIFIED_PRIVATE_GPU_SMOKE: CUDA_MATRIX_OK`, `VERIFIED_PRIVATE_GPU_SMOKE: SOURCE_SHA_MATCHED`, and `GPU_SMOKE_REMOTE_CHECKPOINT_VERIFIED`.
+- Retained artifact: `verified-gpu-smoke-45484283016` (retention 7 days).
+
+**Do not submit this notebook again.** The one-time smoke test is finished. Future GPU experiments use different private notebook slugs with separate audits and permission checks. This result does not mean MedVAL-Bench can be uploaded to Kaggle.

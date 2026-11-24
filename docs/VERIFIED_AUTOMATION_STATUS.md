@@ -95,3 +95,10 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - Private metadata uses `enable_gpu=true`, `is_private=true`, `enable_internet=false` and no Kaggle dataset/kernel/model inputs.
 - GPU computation, CUDA availability and remote saved GPU checkpoint **have not yet been verified**; actual one-time Kaggle GPU submission requires explicit user review and `confirm_gpu_quota=true` in the manual controller. No GPU quota was spent by read-only preflight and no exact remaining quota has been claimed.
 - Original CPU pilot and restricted MedVAL-Bench remain untouched.
+
+## Step 10.5A — First real private GPU CUDA execution confirmed
+
+- GitHub workflow run `45483951593`: one-time `kaggle kernels push` successfully submitted private notebook `yeatasimbillah/medical-llm-gpu-smoke` version 1 with frozen Git SHA `d92b5d6054b6f3802d146e5a1662127e61223993`. Explicit manual GPU approval and duplicate-slug gate passed.
+- Independent read-only verification run `45484283016`: Kaggle reported remote notebook `complete`. Downloaded its saved synthetic checkpoint, verified SHA-256 integrity and frozen source SHA, and validated CUDA matrix calculation. Logs contain `VERIFIED_PRIVATE_GPU_SMOKE: CUDA_MATRIX_OK`, `VERIFIED_PRIVATE_GPU_SMOKE: SOURCE_SHA_MATCHED` and `GPU_SMOKE_REMOTE_CHECKPOINT_VERIFIED`.
+- A non-sensitive 7-day GitHub Actions artifact `verified-gpu-smoke-45484283016` was saved. The private GPU notebook is separate from CPU A/B. No medical dataset, MedVAL-Bench, real LLM or model weights were involved.
+- **Confirmed:** GPU-enabled private Kaggle notebook can execute PyTorch CUDA computation and return an integrity-validated synthetic checkpoint to GitHub. **Not confirmed:** inference/training on a medical model, accurate remaining weekly GPU quota, GPU resume across sessions, or full scientific E1–E7 evaluation.
