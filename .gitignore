@@ -1,0 +1,22 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets
+.env
+.env.*
+!.env.example
+kaggle.json
+*.pem
+*.key
+
+# Research data and checkpoints
+data/
+checkpoints/
+outputs/
+artifacts/
+
+# Jupyter
+.ipynb_checkpoints/
