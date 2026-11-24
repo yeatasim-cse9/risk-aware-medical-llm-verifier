@@ -234,7 +234,9 @@ def reconcile_observed(record: dict, remote: dict[str, str],
             record, "TARGET_REMOTE_STATUS_UNKNOWN"
         )
     # Assess has already verified metadata and status for all completed slots.
-    if base == "pause":
+    if base == "pause" and _reason != "QUOTA_NOT_INDEPENDENTLY_VERIFIED":
+        # Unknown CPU quota blocks NEW launches, not verification of a
+        # previously attempted run that has a valid saved checkpoint.
         return "checkpoint_invalid_manual_review", require_review(
             record, "TARGET_REMOTE_STATUS_UNKNOWN"
         )
