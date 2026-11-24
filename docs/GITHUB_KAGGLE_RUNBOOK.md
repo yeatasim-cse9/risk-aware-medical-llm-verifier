@@ -65,3 +65,14 @@ Do not repeat the first-launch one-time workflow. It was removed after the succe
 - Last A session should use `operation=submit`, `slot=a`, `resume=true` and `source_commit=1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
 - A already exists (version 1 at 40/100); the controller allows a version update only after checking that it has completed. The new Kaggle A version must take B's saved checkpoint as input and reach exactly 100/100, then GitHub should independently verify output.
 - Do not substitute the current GitHub main commit for the frozen pilot commit, and never upload real restricted datasets into this synthetic pilot.
+
+## Final verified three-session CPU pilot — stop submitting
+
+The 3-session synthetic checkpoint test is **complete**:
+- A v1 (40 tasks): GitHub verification `45471757482`.
+- B v1 (80 tasks): GitHub verification `45473523954`.
+- A v2 (100 tasks): GitHub verification `45474169382`.
+
+The final checkpoint integrity, 100 unique IDs, correct source commit and completed status were verified independently. **Do not keep submitting more A/B versions** merely to repeat this finished pilot. Use the next infrastructure phase to implement monitored, quota-aware scheduling, error handling, and Telegram status notifications before declaring unattended operation ready.
+
+These were **manually triggered submission stages**. The laptop did not execute Kaggle tasks, but automatic chaining without manual clicks is not yet implemented.

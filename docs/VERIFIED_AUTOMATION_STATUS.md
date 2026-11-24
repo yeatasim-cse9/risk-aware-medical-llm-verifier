@@ -19,10 +19,9 @@ Pilot evidence:
 - No restricted medical data, patient text, GPU, or paid LLM API used
 
 Still open:
-1. Remote A→B resume 40→80; B→A resume 80→100 and checkpoint integrity validation
-2. Scheduled polling, quota-aware pause/backoff, safe automatic relaunch and error recovery
-3. Telegram secret setup, notification delivery and monitoring
-4. Real proposal datasets, evidence sources, E1–E7 models and statistical metrics
+1. Scheduled polling, quota-aware pause/backoff, safe automatic relaunch and error recovery
+2. Telegram secret setup, notification delivery and monitoring
+3. Real proposal datasets, evidence sources, E1–E7 models and statistical metrics
 
 The test does not guarantee every future Kaggle run will be available, free or uninterrupted.
 
@@ -31,4 +30,14 @@ The test does not guarantee every future Kaggle run will be available, free or u
 - GitHub Actions A→B submission: run `45472493840`, success; slot B version 1 pushed after validating source A's 40/100 checkpoint.
 - Independent remote-output verification: run `45473523954`, success; Kaggle status `complete`, checkpoint downloaded from B saved output.
 - Validated **80/100** unique task IDs exactly `0..79`, no repeat of prior 40 tasks, status `in_progress` and source commit `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
-- Next *unverified* operation: resume from B into slot A and finish remaining 20 tasks. Use the frozen source commit exactly.
+- The next B→A resume has subsequently been completed and independently verified; see the final section.
+
+## Final synthetic three-session proof (2026-11-25 Bangladesh local time)
+
+- Run `45473921059`: GitHub Actions submitted Slot A version 2 after checking Slot B `complete` and validating Slot B `80/100` checkpoint.
+- Run `45474169382`: independently checked Slot A version 2 `complete`, downloaded its persisted Kaggle output, verified checksum, provenance, and `status=completed`.
+- Verified completed task IDs precisely `0..99`, with 100 result hashes and no duplicates.
+- Stored a synthetic, time-limited GitHub Actions artifact named `final-cpu-pilot-100-task-checkpoint`.
+- Final frozen source SHA: `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
+- **Confirmed:** one remote CPU-only pilot processed 100 deterministic tasks across three separate Kaggle versions (A v1 → B v1 → A v2), using persistent checkpoints.
+- **Not confirmed:** unattended/automatic next-session dispatch, quota-aware rescheduling, Telegram notifications, or any E1–E7 scientific evaluation.

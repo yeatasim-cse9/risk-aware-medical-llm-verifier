@@ -24,7 +24,8 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - ✅ Human-guided Kaggle CPU checkpoint and cross-notebook resume demonstration (separate UI notebooks).
 - ✅ Version-controlled **synthetic** CPU pilot runner, integrity checks, unit tests, a credential-free Kaggle submission builder, and manual Kaggle controller workflows.
 - ✅ GitHub Actions → Kaggle API authentication; live preflight; private CPU notebook **Version 1** successfully launched remotely; saved 40/100 synthetic task checkpoint returned and validated by GitHub Actions.
-- ⏳ Second/third-session remote resume (40→80→100), unattended chained submission, Telegram notification secrets, and real E1–E7 scientific experiments are **not deployed or verified**.
+- ✅ Remote **three-session** synthetic checkpoint continuation verified: slot A v1 `40/100` → slot B v1 `80/100` → slot A v2 `100/100`, all checkpoint outputs independently downloaded and integrity validated using pinned Git commit `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
+- ⏳ **Unattended** chaining, scheduled polling and quota/failure recovery, Telegram delivery, and real E1–E7 scientific experiments are **not yet deployed or verified**.
 
 ## Repository map
 
