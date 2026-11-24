@@ -50,3 +50,13 @@ The test does not guarantee every future Kaggle run will be available, free or u
 - Source for the monitor: `scripts/safe_monitor_decision.py`, with standalone unit tests. It cannot dispatch Kaggle versions or send unsolicited status notifications.
 
 **Outstanding:** automatic scheduled status polling, durable progress state/deduplication, quota-aware resubmission and pause/failure recovery. The safe-monitor dry run is not unattended continuous monitoring.
+
+## Scheduled synthetic monitoring and deduplicated Telegram status (2026-11-25 Bangladesh time)
+
+- Workflow: `.github/workflows/synthetic-kaggle-telegram-monitor.yml` with UTC cron at 03:17, 09:17, 15:17 and 21:17, plus manual dispatch.
+- Historical message `100/100 completed` from GitHub run `45478249012` was recorded in non-sensitive `monitoring/synthetic-pilot-telegram-ledger.json` to prevent a repeated first message.
+- Live GitHub Actions run `45479386760` succeeded: downloaded Kaggle A output, validated `100/100`, reported `SCHEDULED_MONITOR: DUPLICATE_PROGRESS_SKIPPED` and `SCHEDULED_MONITOR: EXPERIMENT_COMPLETE_NO_RESTART`. No Telegram message or Kaggle submission was triggered in this run.
+- A completed and already-notified experiment bypasses the Kaggle API on regular scheduled checks; the explicit manual workflow can still verify Kaggle state.
+- All Python CI/unit tests passed in `45479386537`.
+
+Still **not** proven: the first actual future cron event execution (GitHub schedules are best-effort), a real increasing checkpoint transition persisted to the public synthetic ledger, quota-aware automatic session relaunch, failure recovery or actual medical experiments. Exactly-once Telegram delivery cannot be guaranteed if delivery succeeds but ledger persistence fails.

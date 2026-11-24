@@ -25,7 +25,8 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - ✅ Version-controlled **synthetic** CPU pilot runner, integrity checks, unit tests, a credential-free Kaggle submission builder, and manual Kaggle controller workflows.
 - ✅ GitHub Actions → Kaggle API authentication; live preflight; private CPU notebook **Version 1** successfully launched remotely; saved 40/100 synthetic task checkpoint returned and validated by GitHub Actions.
 - ✅ Remote **three-session** synthetic checkpoint continuation verified: slot A v1 `40/100` → slot B v1 `80/100` → slot A v2 `100/100`, all checkpoint outputs independently downloaded and integrity validated using pinned Git commit `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
-- ⏳ **Unattended** chaining, scheduled polling and quota/failure recovery, Telegram delivery, and real E1–E7 scientific experiments are **not yet deployed or verified**.
+- ✅ Kaggle → GitHub → Telegram verified synthetic checkpoint notification, and a **scheduled synthetic-only monitor** with a persistent, non-sensitive ledger; duplicate 100/100 notification suppression verified in GitHub Actions run `45479386760`.
+- ⏳ **Unattended multi-session relaunch**, quota/failure recovery and real E1–E7 scientific experiments are **not yet deployed or verified**. GitHub cron timing is best-effort.
 
 ## Repository map
 
@@ -36,6 +37,7 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - `.github/workflows/research-ci.yml`: automatic basic CI on push / PR.
 - `.github/workflows/kaggle-cpu-pilot.yml`: **manual** prepare / auth-check / preflight / submit / status / collect for synthetic-only experiment.
 - `.github/workflows/kaggle-readonly-preflight.yml`: read-only live Kaggle preflight on matching `main` source changes; no notebook submission.
+- `.github/workflows/synthetic-kaggle-telegram-monitor.yml`: six-hour UTC scheduled synthetic-only checkpoint monitor with persistent duplicate-alert suppression; no notebook submission.
 - `configs/experiment-registry.json`: proposal-derived E1–E7 plan.
 - `docs/`: security rules, reproducibility contract, operational instructions.
 
