@@ -126,3 +126,10 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - GitHub Actions `45486737054` **success**; 8 unit tests plus policy validation passed. Log: `PRETRAINED_MODEL_AUDIT: MODEL_CARD_METADATA_VERIFIED 3_CANDIDATES` and `PRETRAINED_MODEL_AUDIT: NO_GPU_EXECUTION_NO_MODEL_DOWNLOAD`.
 - **All deployment gates remain closed:** upstream model/tokenizer revision and SHA256 not yet frozen; actual weight license notices and downstream distribution rights not fully reviewed; no actual pretrained model VRAM measurement or inference; no authorized model bundle upload and no real dataset use.
 - Earlier Kaggle GPU smoke and tiny untrained Transformer validation are infrastructure evidence only, not medical evidence-grounded evaluation. Restricted MedVAL-Bench has not been uploaded or processed.
+
+## Step 10.5D — First pretrained MiniLM immutable metadata snapshot
+
+- GitHub Actions `45487590017` **success**: 8 provenance/safety tests passed; Hugging Face live public API supplied immutable `sentence-transformers/all-MiniLM-L6-v2` revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`, model safetensors file size `90,868,376` bytes and metadata LFS SHA-256 `53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db`.
+- Hub reports 22,713,728 parameters, giving theoretical parameter-only storage 90,854,912 bytes FP32 or 45,427,456 bytes FP16. These do **not** prove peak GPU memory or actual feasibility.
+- Recorded exact evidence in `configs/model-pins/all-minilm-l6-v2.json` and `docs/MINILM_PROVENANCE_FEASIBILITY.md`. Independent byte-level file hash verification, tokenizer hashes, actual weight/model license-text review, permissible transfer route, GPU memory benchmark and separate approval remain pending.
+- No model or tokenizer bytes were downloaded; no Kaggle GPU session was run; no actual medical datasets or E1–E7 experiments were processed.

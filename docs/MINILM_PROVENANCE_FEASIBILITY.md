@@ -19,3 +19,22 @@ Relevant documentation:
 - https://huggingface.co/docs/huggingface_hub/en/package_reference/hf_api
 
 **Status:** repository metadata-only preflight. No scientific E1-E7 results have been produced.
+
+## Verified pinned snapshot, 25 November 2026 (Dhaka date)
+
+Live GitHub Actions metadata-only run **45487590017** succeeded against the public Hugging Face API; 8 no-network security tests passed. Frozen snapshot committed to `configs/model-pins/all-minilm-l6-v2.json`.
+
+| Evidence item | Verified value | Interpretation |
+| --- | --- | --- |
+| Immutable upstream repository revision | `1110a243fdf4706b3f48f1d95db1a4f5529b4d41` | Public Hub API revision identifier, distinct from any future moving `main` |
+| Safetensors file metadata size | **90,868,376 bytes** | Reported file bytes, NOT measured CUDA memory |
+| Model safetensors LFS SHA-256 metadata | `53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db` | Upstream advertised digest, NOT an independent hash of downloaded bytes |
+| Safetensors parameter count | **22,713,728** | Hub-reported parameter count |
+| FP32 theoretical parameter storage | **90,854,912 bytes** | Lower-bound parameter-only estimate, not peak VRAM |
+| FP16 theoretical parameter storage | **45,427,456 bytes** | Lower-bound parameter-only estimate, not peak VRAM |
+| Actual peak Kaggle GPU memory | **Not measured** | Cannot conclude fit or throughput |
+| Model/tokenizer bytes downloaded | **No** | No GPU time or deployment permission spent |
+
+Official pinned tree: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/tree/1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+
+**Safety outcome:** a real, immutable Hugging Face revision and published file digest are now recorded for this one retrieval baseline. Model/tokenizer file hashes are still **unverified against bytes**, full license/NOTICE review remains pending and actual Kaggle VRAM fit is unmeasured. The repository does not authorize downloading weights or launching the pretrained model. Earlier randomly initialized CUDA proof does not establish MiniLM performance or medical accuracy.
