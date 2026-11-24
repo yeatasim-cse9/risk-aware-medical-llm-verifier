@@ -69,3 +69,12 @@ Still **not** proven: the first actual future cron event execution (GitHub sched
 - Repository CI and offline safety unit tests: run `45480261149` succeeded.
 - No Kaggle submission, Telegram message, medical data processing, or actual quota consumption measurement occurred.
 - Policy simulation covers running/queued/failed, missing or corrupt checkpoints, equal-progress ambiguity, unknown quota and insufficient quota. **Real quota monitoring and automated, idempotent resume remain unimplemented.**
+
+## Step 10.4B — CPU quota, cooldown and retry guard
+
+- Live read-only GitHub Actions run `45480973446` succeeded against private Kaggle A/B notebooks.
+- Verified Kaggle Slot A `complete` with integrity-checked `100/100` and Slot B `complete` with integrity-checked `80/100`; same frozen SHA.
+- Controller correctly output `QUOTA_COOLDOWN_GUARD: STOP ALL_100_TASKS_COMPLETE_NO_RESTART` and `QUOTA_COOLDOWN_GUARD: NO_KAGGLE_SUBMISSION`.
+- Deterministic Python unit tests passed for unknown quota, 6-hour cooldown, 12-hour post-failure backoff, 2 consecutive failures requiring review, rolling 24-hour 2-attempt local cap, stale attestation, missing/untrusted history, active runs and 100/100 stop.
+- Conservative thresholds are **local safeguards only**, not Kaggle-declared quota limits. No CPU remaining quota was measured or inferred from GPU/TPU reporting.
+- No Kaggle job submitted or Telegram message sent. This **does not** enable automatic resume; an independently verified quota/attempt record, durable launch locking and failure recovery remain future work.
