@@ -58,3 +58,10 @@ When testing slot B after successful slot A, run **GitHub Actions → Kaggle CPU
 Do **not** leave `source_commit` empty on this particular resume test: a newer HEAD commit would cause intentional checkpoint provenance mismatch. The controller should preflight B as absent, verify A complete, download the A checkpoint, and attach A as an input to B. Never send medical records through this pilot.
 
 Do not repeat the first-launch one-time workflow. It was removed after the successful run to prevent accidental duplicate submissions.
+
+## Verified B output and next A resume
+
+- Slot B run was successful and the 80-task saved checkpoint was independently downloaded and checksum-validated in GitHub Actions run `45473523954`.
+- Last A session should use `operation=submit`, `slot=a`, `resume=true` and `source_commit=1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
+- A already exists (version 1 at 40/100); the controller allows a version update only after checking that it has completed. The new Kaggle A version must take B's saved checkpoint as input and reach exactly 100/100, then GitHub should independently verify output.
+- Do not substitute the current GitHub main commit for the frozen pilot commit, and never upload real restricted datasets into this synthetic pilot.

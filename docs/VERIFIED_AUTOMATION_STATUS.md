@@ -25,3 +25,10 @@ Still open:
 4. Real proposal datasets, evidence sources, E1–E7 models and statistical metrics
 
 The test does not guarantee every future Kaggle run will be available, free or uninterrupted.
+
+## Verified Kaggle slot B checkpoint (2026-11-25 Bangladesh local time)
+
+- GitHub Actions A→B submission: run `45472493840`, success; slot B version 1 pushed after validating source A's 40/100 checkpoint.
+- Independent remote-output verification: run `45473523954`, success; Kaggle status `complete`, checkpoint downloaded from B saved output.
+- Validated **80/100** unique task IDs exactly `0..79`, no repeat of prior 40 tasks, status `in_progress` and source commit `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
+- Next *unverified* operation: resume from B into slot A and finish remaining 20 tasks. Use the frozen source commit exactly.
