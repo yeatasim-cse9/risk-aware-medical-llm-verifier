@@ -1,0 +1,55 @@
+name: Verify Final Kaggle CPU Pilot 100-Task Checkpoint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kaggle-final-a-verify-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-final-a:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout verification tools
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Kaggle CLI (pinned)
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Validate completed Kaggle A and final checkpoint
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$KAGGLE_API_TOKEN" || { echo "::error::Kaggle token missing"; exit 1; }
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-cpu-auto-a --require complete
+          mkdir -p build/slot-a-final
+          kaggle kernels output yeatasimbillah/medical-llm-cpu-auto-a -p build/slot-a-final
+          python scripts/verify_checkpoint.py build/slot-a-final --expected-commit '1a90191ae2734a74807eb53fa7d5b27a4e44c78f'
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          paths = list(Path("build/slot-a-final").rglob("cpu-pilot-automation.json"))
+          assert len(paths) == 1, f"Expected one final checkpoint, found {len(paths)}"
+          state = json.loads(paths[0].read_text(encoding="utf-8"))
+          ids = state["completed_task_ids"]
+          assert ids == list(range(100)), "Expected exactly 100 ordered, unique completed task IDs"
+          assert state["status"] == "completed", "Final checkpoint not marked completed"
+          assert len(state["results"]) == 100
+          print("FINAL KAGGLE CHECKPOINT VERIFIED: 100/100", flush=True)
+          PY
+      - name: Retain synthetic final checkpoint
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-cpu-pilot-100-task-checkpoint
+          path: build/slot-a-final/checkpoints/cpu-pilot-automation.json
+          retention-days: 7
