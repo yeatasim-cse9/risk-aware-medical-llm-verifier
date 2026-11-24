@@ -1,0 +1,30 @@
+name: Telegram Read-only Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/telegram-readonly-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout diagnostic
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Read-only Telegram status
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python scripts/telegram_readonly_diagnostic.py
