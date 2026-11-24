@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "purpose": "Access-aware acquisition plan only; no raw data checked into Git",
+  "datasets": [
+    {
+      "id": "medhallu",
+      "role": "development",
+      "version": "revision-not-yet-pinned",
+      "official_source": "https://huggingface.co/datasets/UTAustin-AIHealth/MedHallu",
+      "access": "public",
+      "storage": "permitted-private-kaggle-dataset",
+      "acquisition": "automatic-after-audit",
+      "access_verified": false,
+      "downloaded": false,
+      "sha256": null
+    },
+    {
+      "id": "medval",
+      "role": "physician-gold-test",
+      "version": "1.0.1",
+      "official_source": "https://physionet.org/content/medval-bench/1.0.1/",
+      "access": "credentialed-DUA-CITI",
+      "storage": "approved-restricted-environment-only",
+      "acquisition": "user-approved-restricted-access-only",
+      "access_verified": false,
+      "downloaded": false,
+      "sha256": null
+    },
+    {
+      "id": "bioasq14b",
+      "role": "external-test",
+      "version": "14b-2026-exact-file-not-yet-pinned",
+      "official_source": "https://participants-area.bioasq.org/general_information/Task14b/",
+      "access": "registration-required",
+      "storage": "private-permitted-only",
+      "acquisition": "registration-then-authorized-script",
+      "access_verified": false,
+      "downloaded": false,
+      "sha256": null
+    },
+    {
+      "id": "pubmed2026",
+      "role": "retrieval-evidence",
+      "version": "2026-baseline",
+      "official_source": "https://www.nlm.nih.gov/pubs/techbull/jf26/jf26_PubMed_2026_BaselineRelease.html",
+      "access": "public-with-copyright-conditions",
+      "storage": "filtered-versioned-evidence-index",
+      "acquisition": "incremental-automated-verified-MD5",
+      "access_verified": false,
+      "downloaded": false,
+      "sha256": null
+    },
+    {
+      "id": "dailymed",
+      "role": "drug-label-evidence",
+      "version": "SPL-versions-not-yet-pinned",
+      "official_source": "https://dailymed.nlm.nih.gov/dailymed/spl-resources-all-drug-labels.cfm",
+      "access": "public-with-source-terms",
+      "storage": "selected-versioned-label-cache",
+      "acquisition": "API-specific-labels-first",
+      "access_verified": false,
+      "downloaded": false,
+      "sha256": null
+    }
+  ]
+}
