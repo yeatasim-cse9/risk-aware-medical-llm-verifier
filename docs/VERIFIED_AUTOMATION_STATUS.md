@@ -41,3 +41,12 @@ The test does not guarantee every future Kaggle run will be available, free or u
 - Final frozen source SHA: `1a90191ae2734a74807eb53fa7d5b27a4e44c78f`.
 - **Confirmed:** one remote CPU-only pilot processed 100 deterministic tasks across three separate Kaggle versions (A v1 → B v1 → A v2), using persistent checkpoints.
 - **Not confirmed:** unattended/automatic next-session dispatch, quota-aware rescheduling, Telegram notifications, or any E1–E7 scientific evaluation.
+
+## Kaggle → Telegram and safe-monitor proof
+
+- GitHub Actions run `45477514616`: Telegram private notification smoke test succeeded.
+- Run `45478249012`: Kaggle Slot A saved output independently downloaded and verified, with **100/100** synthetic tasks; validated operational status message delivered to Telegram.
+- Run `45478609612`: Read-only safe-monitor dry run succeeded, producing `SAFE_MONITOR: STOP ALL_TASKS_COMPLETE_NO_RESTART` for the completed, checksum-verified checkpoint.
+- Source for the monitor: `scripts/safe_monitor_decision.py`, with standalone unit tests. It cannot dispatch Kaggle versions or send unsolicited status notifications.
+
+**Outstanding:** automatic scheduled status polling, durable progress state/deduplication, quota-aware resubmission and pause/failure recovery. The safe-monitor dry run is not unattended continuous monitoring.
