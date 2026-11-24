@@ -1,0 +1,48 @@
+name: CPU Quota and Cooldown Guard - Read Only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/cpu-quota-cooldown-guard.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpu-quota-cooldown-guard
+  cancel-in-progress: false
+
+jobs:
+  quota-and-cooldown:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout verified code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run quota and retry unit tests
+        run: |
+          python -m compileall -q scripts src tests
+          python -m unittest discover -s tests -v
+      - name: Install pinned Kaggle CLI
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Assess live synthetic notebooks without launch
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Missing Kaggle API secret"
+            exit 1
+          fi
+          python scripts/quota_cooldown_guard.py --work-dir build/quota-cooldown
+          echo "READ_ONLY_CPU_QUOTA_COOLDOWN_TEST_PASSED"
