@@ -1,0 +1,39 @@
+name: MiniLM Pinned Model Metadata and GPU Feasibility - No Weights
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/minilm-model-provenance-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provenance:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Checkout source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run network-free provenance security tests
+        run: |
+          python -m compileall -q scripts tests
+          python -m unittest discover -s tests -p test_minilm_provenance.py -v
+      - name: Read public Hugging Face metadata only (NO model downloads)
+        run: python scripts/pin_minilm_provenance.py --out build/model-provenance/all-minilm-l6-v2.json
+      - name: Store tiny non-sensitive provenance JSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: minilm-metadata-only-${{ github.run_id }}
+          path: build/model-provenance/all-minilm-l6-v2.json
+          retention-days: 7
+          if-no-files-found: error
