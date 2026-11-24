@@ -1,0 +1,68 @@
+name: Scheduled Synthetic Kaggle Telegram Monitor
+
+on:
+  schedule:
+    # UTC; every 6 hours, off the busiest start-of-hour minute.
+    - cron: '17 3,9,15,21 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/synthetic-kaggle-telegram-monitor.yml
+
+permissions:
+  contents: write # only needed for versioned, non-sensitive progress dedup ledger
+
+concurrency:
+  group: scheduled-synthetic-kaggle-telegram-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify monitoring safety unit tests
+        run: |
+          python -m compileall -q src scripts tests
+          python -m unittest discover -s tests -v
+      - name: Check persistent dedup ledger before polling
+        id: guard
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: python scripts/periodic_pilot_monitor.py guard
+      - name: Install pinned Kaggle CLI only if poll needed
+        if: steps.guard.outputs.poll == 'true'
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Check Kaggle status and download verified synthetic checkpoint
+        if: steps.guard.outputs.poll == 'true'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Kaggle API secret missing"
+            exit 1
+          fi
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-cpu-auto-a --require complete
+          mkdir -p build/monitor
+          kaggle kernels output yeatasimbillah/medical-llm-cpu-auto-a -p build/monitor
+          python scripts/verify_checkpoint.py build/monitor --expected-commit 1a90191ae2734a74807eb53fa7d5b27a4e44c78f
+      - name: Send Telegram only when verified checkpoint progress changes
+        if: steps.guard.outputs.poll == 'true'
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/periodic_pilot_monitor.py process build/monitor

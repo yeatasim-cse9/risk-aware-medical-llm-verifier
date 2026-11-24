@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "scope": "synthetic_cpu_pilot_only",
+  "experiment_id": "cpu-pilot-automation-001",
+  "last_notified": {
+    "slot": "a",
+    "count": 100,
+    "status": "completed",
+    "key": "1a90191ae2734a74807eb53fa7d5b27a4e44c78f:a:100:completed"
+  }
+}
