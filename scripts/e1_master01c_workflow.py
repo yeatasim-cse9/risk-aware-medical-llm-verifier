@@ -43,15 +43,19 @@ def source(commit=None):
                 "SOURCE_WORKTREE_OR_VERSION_MISMATCH")
     return commit,bodies,hashes
 
-def build(out):
+def build(out,authorize=False):
+    require(type(authorize) is bool,"AUTHORIZATION_TYPE")
     commit,bodies,hashes=source()
     out.mkdir(parents=True,exist_ok=False)
-    wrapper="""import hashlib, json, os, sys, tempfile, types
+    wrapper=r"""import hashlib, json, os, sys, tempfile, types
 from pathlib import Path
 bodies=%r
 hashes=%r
 commit=%r
+authorized=%r
 try:
+    if authorized is not True:
+        raise ValueError("RIGHTS_REQUIRED")
     if any(hashlib.sha256(body).hexdigest()!=hashes[name] for name,body in bodies.items()):
         raise ValueError("PACKAGE_PIN")
     for name,body in bodies.items():
@@ -97,7 +101,7 @@ except Exception as exc:
     print("MASTER01C_FAILED_STAGE="+stage,flush=True)
     print("MASTER01C_FAILED_CODE="+(code if code in allowed else "SAFE_FAILURE_REQUIRES_REVIEW"),flush=True)
     sys.exit(1)
-"""%(bodies,hashes,commit,REPORT)
+"""%(bodies,hashes,commit,authorize,REPORT)
     compile(wrapper,"runner.py","exec")
     (out/"runner.py").write_text(wrapper,encoding="utf-8")
     meta={"id":KERNEL,"title":KERNEL.split("/")[1],"code_file":"runner.py","language":"python",
@@ -165,11 +169,12 @@ if __name__=="__main__":
     parser.add_argument("op",choices=["build","preflight","status","verify","monitor","notify"])
     parser.add_argument("--out",type=Path,default=Path("build/master01c"))
     parser.add_argument("--expected-commit",default=None)
+    parser.add_argument("--authorized-submit",action="store_true")
     parser.add_argument("--event",choices=["controller started","submission accepted","controller failed",
         "Kaggle COMPLETE | aggregate independently verified | scientific approval pending"])
     a=parser.parse_args()
     try:
-        if a.op=="build": build(a.out)
+        if a.op=="build": build(a.out,a.authorized_submit)
         elif a.op=="preflight": preflight()
         elif a.op=="status": print("MASTER01C_KAGGLE_STATUS="+check(KERNEL,"any"))
         elif a.op=="verify": verify(a.out,a.expected_commit)
