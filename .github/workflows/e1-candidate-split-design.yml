@@ -1,0 +1,48 @@
+name: E1 Candidate Labels and Proxy Split Design - Synthetic Only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/e1-candidate-split-design.yml
+      - src/research_data/e1_candidate_splits.py
+      - src/research_data/medhallu_native_audit.py
+      - tests/test_e1_candidate_splits.py
+      - configs/medhallu-e1-prior-aggregate-evidence.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-design:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run deterministic fake-data candidate splitter tests
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_e1_candidate_splits.py -v
+          python -m unittest discover -s tests -p test_e1_readiness.py -v
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("configs/medhallu-e1-prior-aggregate-evidence.json")
+          d=json.loads(p.read_text())
+          assert d["kind"]=="prior_independently_verified_kaggle_aggregate_evidence"
+          assert d["dataset_revision_sha"]=="515060458a945c633debc6fd5baac7764416b724"
+          assert {x:d["source_files"][x]["rows"] for x in ("pqa_labeled","pqa_artificial")}=={"pqa_labeled":1000,"pqa_artificial":9000}
+          assert d["observed_aggregate"]["questions_repeated_within_or_across_configs"]==1
+          assert d["observed_aggregate"]["ground_truth_equals_hallucinated_answer_pairs"]==1
+          assert not any(d[x] for x in ("label_semantics_adjudicated","pubmedqa_lineage_verified","leakage_safe_final_splits_frozen","scientific_experiments_executed"))
+          print("E1_PRIOR_AUDIT_PROVENANCE_REFERENCED_NOT_REEXECUTED")
+          PY
+          python scripts/e1_readiness.py
+          echo "E1_CANDIDATE_SPLIT_LOGIC_TESTED_NO_DATA_DOWNLOAD_NO_KAGGLE_NO_E1"
