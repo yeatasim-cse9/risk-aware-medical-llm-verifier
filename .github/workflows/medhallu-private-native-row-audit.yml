@@ -1,0 +1,180 @@
+name: MedHallu Private Native Row Audit Controller
+
+# The only paths that can submit a Kaggle notebook are explicitly approved
+# manual workflow_dispatch inputs. Push/PR tasks NEVER download dataset rows.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/medhallu-private-native-row-audit.yml
+      - scripts/medhallu_private_rows.py
+      - tests/test_medhallu_private_rows.py
+      - src/research_data/medhallu_native_audit.py
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        description: "prepare, preflight, submit one private CPU notebook, status, or verify aggregate"
+        options: [prepare, preflight, submit, status, verify]
+        default: prepare
+        required: true
+      confirm_private_dataset_rights:
+        type: boolean
+        description: "Submit only: I reviewed MedHallu/PubMedQA MIT terms AND NLM abstract copyright; private Kaggle analysis authorized, no redistribution"
+        default: false
+      confirm_cpu_quota:
+        type: boolean
+        description: "Submit only: I authorize this one private CPU-only Kaggle run"
+        default: false
+      source_commit:
+        type: string
+        description: "Verify only: 40-character SHA of the submitted workflow code"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medhallu-private-native-row-audit-v1
+  cancel-in-progress: false
+
+jobs:
+  native-audit:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Require exact submitted commit for independent verify
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+        env:
+          PINNED_SHA: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$PINNED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Enter the exact 40-character source Git commit from submit"
+            exit 1
+          fi
+      - name: Checkout trusted source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'verify' && inputs.source_commit || github.sha }}
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Offline validation with fabricated nonmedical records ONLY
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_medhallu_private_rows.py -v
+          python -m unittest discover -s tests -p test_medhallu_native_audit.py -v
+          python -m unittest discover -s tests -p test_e1_readiness.py -v
+      - name: Build private code-only Kaggle CPU audit package
+        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit'
+        run: |
+          set -euo pipefail
+          python scripts/medhallu_private_rows.py build build/medhallu-native-private --source-commit "$(git rev-parse HEAD)"
+          python -m py_compile build/medhallu-native-private/runner.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("build/medhallu-native-private")
+          meta=json.loads((root/"kernel-metadata.json").read_text())
+          assert meta["id"] == "yeatasimbillah/medical-llm-medhallu-native-rows-v1"
+          assert meta["is_private"] is True
+          assert meta["enable_gpu"] is False and meta["enable_tpu"] is False
+          assert meta["enable_internet"] is True
+          assert all(meta[k] == [] for k in ("dataset_sources", "kernel_sources", "competition_sources", "model_sources"))
+          assert {p.name for p in root.iterdir() if p.is_file()} == {"runner.py", "kernel-metadata.json"}
+          print("PRIVATE_CPU_CODE_ONLY_MEDHALLU_AUDIT_PACKAGE_READY")
+          PY
+      - name: Retain code-only package for review
+        if: github.event_name == 'push' || inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: medhallu-native-code-only-${{ github.run_id }}
+          path: |
+            build/medhallu-native-private/runner.py
+            build/medhallu-native-private/kernel-metadata.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Require Kaggle secret and pinned CLI for read/submit operations
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status' || inputs.operation == 'verify')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::KAGGLE_API_TOKEN is missing"
+            exit 1
+          fi
+          python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Check Kaggle notebook state read-only
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from scripts.kaggle_status import check
+          kernel="yeatasimbillah/medical-llm-medhallu-native-rows-v1"
+          operation=os.environ["OPERATION"]
+          state=check(kernel,"any")
+          if operation == "submit" and state != "missing":
+              raise SystemExit("PRIVATE_NATIVE_JOB_ALREADY_EXISTS_BLOCK_REPEAT_SUBMISSION")
+          print("MEDHALLU_PRIVATE_NATIVE_REMOTE_STATE="+state)
+          PY
+      - name: Fail closed unless rights and CPU quota are independently approved
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          DATA_RIGHTS_APPROVED: ${{ inputs.confirm_private_dataset_rights }}
+          CPU_APPROVED: ${{ inputs.confirm_cpu_quota }}
+        run: |
+          set -euo pipefail
+          if [[ "$DATA_RIGHTS_APPROVED" != "true" || "$CPU_APPROVED" != "true" ]]; then
+            echo "::error::Both documented private-dataset-rights review and CPU resource approval are mandatory"
+            exit 1
+          fi
+          echo "PRIVATE_DATA_RIGHTS_AND_CPU_APPROVAL_GATES_PASSED"
+      - name: Ensure Kaggle quota endpoint can be queried
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          kaggle quota > /dev/null 2>&1 || { echo "::error::Quota API unavailable; no submission"; exit 1; }
+          echo "KAGGLE_QUOTA_ENDPOINT_ACCESSIBLE_CPU_QUOTA_AMOUNT_NOT_ASSERTED"
+      - name: One-time private Kaggle CPU submission — no scientific E1 experiment
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "MEDHALLU_NATIVE_AUDIT_SOURCE_COMMIT=$(git rev-parse HEAD)"
+          kaggle kernels push -p build/medhallu-native-private
+          echo "MEDHALLU_PRIVATE_NATIVE_AUDIT_SUBMITTED_NOT_EXECUTED_OR_VERIFIED"
+      - name: Verify saved aggregate only, after confirmed Kaggle completion
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-medhallu-native-rows-v1 --require complete
+          mkdir -p build/medhallu-native-verified
+          kaggle kernels output yeatasimbillah/medical-llm-medhallu-native-rows-v1 -p build/medhallu-native-verified
+          python scripts/medhallu_private_rows.py verify build/medhallu-native-verified --source-commit "$(git rev-parse HEAD)"
+          echo "PRIVATE_MEDHALLU_NATIVE_ROW_AUDIT_FINISHED_VERIFIED_NO_E1_RUN"
+      - name: Upload aggregate only — never upload raw dataset or Kaggle logs
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medhallu-native-aggregate-only-${{ github.run_id }}
+          path: build/medhallu-native-verified/medhallu_native_aggregate.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Affirm E1 remains blocked
+        if: always()
+        run: |
+          echo "NO_E1_SCIENTIFIC_EXPERIMENT_NO_MEDVAL_NO_TRAINING"
