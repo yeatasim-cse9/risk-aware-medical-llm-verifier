@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "scope": "approved_synthetic_infrastructure_only",
+  "bootstrap_sent": false,
+  "kaggle_events": {
+    "cpu-a": {
+      "last_event": "cpu-a:complete",
+      "delivery": "historical_suppressed"
+    },
+    "cpu-b": {
+      "last_event": "cpu-b:complete",
+      "delivery": "historical_suppressed"
+    },
+    "gpu-smoke": {
+      "last_event": "gpu-smoke:complete",
+      "delivery": "historical_suppressed"
+    },
+    "gpu-tiny": {
+      "last_event": "gpu-tiny:complete",
+      "delivery": "historical_suppressed"
+    }
+  },
+  "github_events": []
+}
