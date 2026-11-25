@@ -39,3 +39,12 @@ These FOUR are historic, already completed notebooks. Their notifications are in
 On first push of the workflow, the job runs offline safety tests and sends **one** private, non-medical Telegram setup message, which is recorded in the ledger and cannot deliberately replay through normal workflow use. It does not backfill old Kaggle results. A `workflow_dispatch` with `operation=poll` checks pending jobs only; `operation=smoke` tries the already-deduplicated one-time setup message.
 
 Existing CPU pilot's older `synthetic-kaggle-telegram-monitor.yml` remains in place and independently suppresses duplicate 100/100 status messages. It should not be reconfigured to send clinical contents. No E1–E7 datasets have been acquired or evaluated.
+
+## First live verification — November 25, 2026 (Bangladesh)
+
+- `45544039917`: successful setup bootstrapping; exactly one operational Telegram confirmation was sent and `bootstrap_sent=true` persisted to the GitHub non-sensitive ledger.
+- `45544218761`: successful safe re-test of the same `push` event: `BOOTSTRAP_ALREADY_RECORDED`, then `HISTORICAL_KAGGLE_ALERTS_SUPPRESSED`; **no repeat setup alert and no retroactive Kaggle messages**.
+- 16 alert-specific Python unit tests passed in the final live repeat run; repository CI `45544218842` also succeeded.
+- Real `workflow_run` handling was exercised by `45544022815` and `45544184671`. Both correctly skipped routine GitHub CI push successes (not a test of sending an actual job-failure alert).
+- **Not yet independently observed**: the first hourly GitHub `schedule` event, an actual future workflow failure notification, and a newly registered Kaggle terminal-state message. The unit tests simulate those situations but do not replace a live failure/end-to-end alert observation.
+- Full unattended Kaggle relaunch, exact-once Telegram delivery, restricted medical dataset use, and scientific E1–E7 work remain out of scope.

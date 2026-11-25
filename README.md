@@ -34,6 +34,7 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - ✅ Step 10.5C source-linked **model-card license metadata** shortlist: MiniLM retrieval (Apache-2.0), MiniLM NLI (Apache-2.0), Microsoft BiomedBERT (MIT); all 8 offline audit safety tests and GitHub run `45486737054` passed. **No model weights acquired or model licenses fully cleared; no GPU use**.
 - ✅ Step 10.5D MiniLM retrieval model **immutable Hugging Face revision**, reported safetensors size and metadata SHA-256 pinned by read-only public API workflow `45487590017`. Actual byte hashes/VRAM fit not measured; no weights downloaded or GPU used.
 - ✅ Step 10.5E read-only synthetic end-to-end audit: **four** already completed Kaggle notebooks independently reverified (CPU A 100/100, CPU B 80/100, CUDA smoke, toy GPU Transformer), Telegram dedup ledger consistent, 137 unit tests passed; audit run `45488584121`. No GPU time, new submission, or notification used.
+- ✅ Step 10.5F automatic Telegram alerts for **approved GitHub workflow successes/failures** and **registered synthetic Kaggle terminal statuses**, including checkpoint validation and persistent deduplication. First live setup notification delivered (`45544039917`); duplicate suppression re-tested (`45544218761`); all 16 alert unit tests and main CI passed. Hourly Kaggle schedule and real future failure alert remain to be observed; no unauthorized jobs or clinical outputs are monitored.
 - ⏳ **Actual unattended multi-session dispatch**, live CPU quota proof, durable submitted-intent persistence, pretrained medical-model evaluation and E1–E7 scientific experiments are **not yet deployed or verified**. GitHub cron timing is best-effort.
 
 ## Repository map
@@ -46,6 +47,7 @@ Evidence sources: **PubMed 2026**, **DailyMed**, with versioned provenance. E2�
 - `.github/workflows/kaggle-cpu-pilot.yml`: **manual** prepare / auth-check / preflight / submit / status / collect for synthetic-only experiment.
 - `.github/workflows/kaggle-readonly-preflight.yml`: read-only live Kaggle preflight on matching `main` source changes; no notebook submission.
 - `.github/workflows/synthetic-kaggle-telegram-monitor.yml`: six-hour UTC scheduled synthetic-only checkpoint monitor with persistent duplicate-alert suppression; no notebook submission.
+- `.github/workflows/universal-research-telegram-alerts.yml`: event-driven GitHub completion/failure Telegram alerts and hourly polling for explicitly registered synthetic Kaggle jobs; no Kaggle submit.
 - `configs/experiment-registry.json`: proposal-derived E1–E7 plan.
 - `docs/`: security rules, reproducibility contract, operational instructions.
 
