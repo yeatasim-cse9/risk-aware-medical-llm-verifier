@@ -41,6 +41,33 @@ MAX_TOTAL_BYTES = 60_000_000
 OUTPUT_NAME = "medhallu_native_aggregate.json"
 MODULE_SHA256 = "__MODULE_SHA256__"
 
+# Only constant code-owned milestones and error identifiers may appear in logs.
+# Never print an exception's raw message; it may contain source content or URLs.
+AUDIT_STAGE = "BOOT"
+
+
+def _stage(code):
+    global AUDIT_STAGE
+    AUDIT_STAGE = code
+    print("MEDHALLU_NATIVE_AUDIT_STAGE=" + code, flush=True)
+
+
+def _private_temp_root():
+    working = Path("/kaggle/working")
+    temp_root = Path("/kaggle/temp")
+    if not working.is_dir() or working.is_symlink():
+        raise NativeAuditError("KAGGLE_WORKING_DIRECTORY_UNAVAILABLE")
+    # Some Kaggle images do not pre-create /kaggle/temp. Creating that
+    # ephemeral scratch directory is safer than using exported working/.
+    if temp_root.is_symlink():
+        raise NativeAuditError("UNSAFE_TEMP_SYMLINK")
+    temp_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not temp_root.is_dir() or temp_root.is_symlink():
+        raise NativeAuditError("TEMP_DIRECTORY_UNAVAILABLE")
+    if not temp_root.resolve().is_relative_to(Path("/kaggle").resolve()):
+        raise NativeAuditError("TEMP_DIRECTORY_OUTSIDE_KAGGLE")
+    return temp_root
+
 
 def _dependencies():
     try:
@@ -61,24 +88,28 @@ def _dependencies():
 
 
 def _run():
-    if not Path("/kaggle/temp").is_dir() or not Path("/kaggle/working").is_dir():
-        raise NativeAuditError("KAGGLE_PRIVATE_ENVIRONMENT_REQUIRED")
+    _stage("PRIVATE_ENVIRONMENT_CHECK")
+    temp_root = _private_temp_root()
+    _stage("PRIVATE_ENVIRONMENT_OK")
     # Private /kaggle/working must only contain the final sanitized aggregate.
     output = Path("/kaggle/working") / OUTPUT_NAME
     if output.exists() or output.is_symlink():
         raise NativeAuditError("EXISTING_REPORT_BLOCKED")
-    with tempfile.TemporaryDirectory(dir="/kaggle/temp", prefix="medhallu-audit-") as tmp:
+    with tempfile.TemporaryDirectory(dir=str(temp_root), prefix="medhallu-audit-") as tmp:
         base = Path(tmp)
         os.environ["HF_HOME"] = str(base / "hf-home")
         os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
-        # The public Hub is the only source. No other dataset or API is accessed.
+        # The public Hub is the only dataset source.
+        _stage("DEPENDENCIES")
         snapshot_download, parquet = _dependencies()
+        _stage("HUB_SNAPSHOT")
         folder = Path(snapshot_download(
             repo_id="UTAustin-AIHealth/MedHallu",
             repo_type="dataset", revision=DATASET_REVISION,
             allow_patterns=["pqa_labeled/*.parquet", "pqa_artificial/*.parquet"],
             local_dir=str(base / "data"), max_workers=2, token=False,
         ))
+        _stage("FILE_LAYOUT_AND_SCHEMA")
         approved_files = {}
         rows = {}
         total_bytes = 0
@@ -105,9 +136,11 @@ def _run():
                 "relative_file": f.relative_to(folder).as_posix(),
                 "size_bytes": size, "sha256": digest.hexdigest(),
             }
+        _stage("NATIVE_ROW_AUDIT")
         summary = audit_native_rows(rows)
         verify_report(summary)
         del rows
+        _stage("AGGREGATE_INTEGRITY")
         envelope = {
             "schema_version": 1,
             "audit_kind": "private_kaggle_medhallu_native_rows",
@@ -124,6 +157,7 @@ def _run():
         envelope["integrity_sha256"] = hashlib.sha256(raw).hexdigest()
         if len(json.dumps(envelope).encode("utf-8")) > 8192:
             raise NativeAuditError("REPORT_EXCEEDS_AGGREGATE_ONLY_LIMIT")
+        _stage("AGGREGATE_SAVE")
         output.write_text(json.dumps(envelope, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         print("MEDHALLU_NATIVE_PRIVATE_AGGREGATE_SAVED")
         print("NO_RAW_ROWS_IN_KAGGLE_WORKING_OR_GITHUB")
@@ -132,8 +166,23 @@ def _run():
 if __name__ == "__main__":
     try:
         _run()
-    except Exception:
-        # Never log dataset text, third-party HTTP responses or private paths.
+    except Exception as exc:
+        # Error messages, paths and tracebacks may contain dataset text or URLs.
+        # Only allow constant in-repository codes to pass to private logs.
+        if isinstance(exc, NativeAuditError):
+            candidate = str(exc)
+            safe_code = candidate if (len(candidate) <= 64 and
+                candidate.replace("_", "").isalnum() and candidate == candidate.upper()
+            ) else "SAFE_VALIDATION_ERROR"
+        else:
+            safe_code = "RUNTIME_EXCEPTION_CLASS_" + (
+                "IMPORT" if isinstance(exc, ImportError) else
+                "FILESYSTEM" if isinstance(exc, OSError) else
+                "DEPENDENCY_INSTALL" if isinstance(exc, subprocess.CalledProcessError) else
+                "UNKNOWN"
+            )
+        print("MEDHALLU_NATIVE_AUDIT_FAILED_STAGE=" + AUDIT_STAGE, file=sys.stderr)
+        print("MEDHALLU_NATIVE_AUDIT_FAILED_CODE=" + safe_code, file=sys.stderr)
         print("MEDHALLU_NATIVE_PRIVATE_AUDIT_FAILED_SAFE", file=sys.stderr)
         raise SystemExit(1)
 '''
