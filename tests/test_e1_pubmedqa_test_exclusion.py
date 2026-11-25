@@ -136,6 +136,7 @@ class RemediationTests(unittest.TestCase):
     def test_manual_kaggle_runner_has_hard_blocker_and_no_training(self):
         body = (ROOT/"scripts/e1_pubmedqa_test_exclusion_kaggle.py").read_text()
         compile(body, "e1-remediation-runner", "exec")
+        print("E1_REMEDIATION_RUNNER_SHA256=" + sha256(body.encode("utf-8")).hexdigest())
         self.assertIn('["ambiguous_multiple_pubids_parent_rows"] != 23', body)
         self.assertIn('["original_official_500_test_heldout"] != 500', body)
         self.assertIn('["source_reviewed_candidate_parent_records"] != 9474', body)
