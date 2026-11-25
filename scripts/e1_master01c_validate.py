@@ -33,6 +33,8 @@ def dist(d,n,m,limit):
         a=d[k]
         require(type(a) is list and len(a)<=limit and all(integer(v,1,total) for v in a)
                 and sum(a)==total and a==sorted(a,reverse=True),"BALANCE_COUNTS")
+    require(all(v<=d["before_sorted"][i] for i,v in enumerate(d["after_sorted"]))
+            if len(d["after_sorted"])<=len(d["before_sorted"]) else False,"BALANCE_MONOTONIC")
     tv=d["total_variation"]
     require((n*m==0 and tv is None) or (n*m>0 and type(tv) in (int,float)
         and math.isfinite(tv) and 0<=tv<=1),"BALANCE_TV")
@@ -41,6 +43,7 @@ def validate(d,commit,hashes):
     """Validate exact schema and known bounds, not independently authenticate data."""
     keys(d,("schema_version","status","previous_evidence_sha256","previous_mapping_sha256",
             "seed","encoder_aggregate_sha256","maxima","strata","review_queue_count",
+            "source_commit","source_module_sha256","dataset_pins","model_asset_set_sha256",
             "quarantine","balance","versions","device","gates","package_source_commit",
             "package_hashes","integrity_sha256",*FALSE_FLAGS))
     raw=d.copy();h=raw.pop("integrity_sha256")
@@ -54,7 +57,9 @@ def validate(d,commit,hashes):
             d["status"]=="PROVISIONAL_REMEDIATION_REVIEW_REQUIRED" and
             d["previous_evidence_sha256"]==p.PRIOR_EVIDENCE and
             d["previous_mapping_sha256"]==b.EXPECTED_MAPPING and d["seed"]==c.SEED and
-            d["encoder_aggregate_sha256"]==p.EXPECTED_ENCODERS,"EVIDENCE_PIN")
+            d["encoder_aggregate_sha256"]==p.EXPECTED_ENCODERS and d["source_commit"]==b.BASE
+            and d["source_module_sha256"]==b.PINS and d["dataset_pins"]==p.DATA_PINS
+            and d["model_asset_set_sha256"]==p.EXPECTED_ASSETS,"EVIDENCE_PIN")
     require(all(d[k] is False for k in FALSE_FLAGS),"FALSE_APPROVAL_OR_PRIVACY")
     p.compare_maxima(d["maxima"])
     keys(d["versions"],p.OLD_VERSIONS)
@@ -92,6 +97,10 @@ def validate(d,commit,hashes):
     keys(d["balance"],c.SPLITS[:3])
     expected={"pqa_artificial":{"train":7185,"dev":890,"test":899},
               "pqa_labeled":{"train":394,"dev":57,"test":49}}
+    categories={"pqa_artificial":{"train":[5472,879,793,41],"dev":[675,115,98,2],"test":[682,117,97,3]},
+                "pqa_labeled":{"train":[300,84,10],"dev":[47,8,2],"test":[33,14,2]}}
+    difficulties={"pqa_artificial":{"train":[2556,2333,2296],"dev":[320,291,279],"test":[304,298,297]},
+                  "pqa_labeled":{"train":[167,121,106],"dev":[29,14,14],"test":[20,18,11]}}
     for s,x in d["balance"].items():
         keys(x,("config","category","difficulty","by_config"))
         n,m=q["counts"][s]["original"],q["counts"][s]["retained"]
@@ -110,6 +119,8 @@ def validate(d,commit,hashes):
             mc=sum(a["after_sorted"])
             require(0<=mc<=nc,"CONFIG_COUNTS")
             dist(a,nc,mc,4);dist(z["difficulty"],nc,mc,3)
+            require(a["before_sorted"]==categories[cfg][s] and
+                    z["difficulty"]["before_sorted"]==difficulties[cfg][s],"BASELINE_BALANCE_PIN")
             before.append(nc);retained.append(mc)
         require(sum(retained)==m and x["config"]["before_sorted"]==sorted(before,reverse=True)
                 and x["config"]["after_sorted"]==sorted((v for v in retained if v),reverse=True),
