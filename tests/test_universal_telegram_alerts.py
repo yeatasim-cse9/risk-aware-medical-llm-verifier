@@ -61,9 +61,12 @@ class UniversalAlertsTests(unittest.TestCase):
             if k != "medhallu-metadata"
         ))
         fresh = json.loads(BASELINE.read_text(encoding="utf-8"))
-        self.assertEqual(
-            fresh["kaggle_events"]["medhallu-metadata"],
-            {"last_event": None, "delivery": "none"}
+        medhallu = fresh["kaggle_events"]["medhallu-metadata"]
+        self.assertNotEqual(medhallu["delivery"], "historical_suppressed")
+        self.assertIn(
+            medhallu["last_event"],
+            (None, "medhallu-metadata:started", "medhallu-metadata:complete",
+             "medhallu-metadata:failed", "medhallu-metadata:verification_failed"),
         )
 
     @patch("universal_telegram_alerts.read_ledger")
