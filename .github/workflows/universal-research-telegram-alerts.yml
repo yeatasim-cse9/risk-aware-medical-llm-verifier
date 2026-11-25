@@ -1,4 +1,5 @@
 name: Universal Research Telegram Completion and Failure Alerts
+# Initial setup retry after offline alert tests were corrected; no Kaggle job is launched.
 
 on:
   push:
