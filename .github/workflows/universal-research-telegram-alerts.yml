@@ -1,0 +1,130 @@
+name: Universal Research Telegram Completion and Failure Alerts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/universal-research-telegram-alerts.yml
+  workflow_run:
+    workflows:
+      - Research Repository CI
+      - Kaggle CPU Pilot Controller
+      - Kaggle Private GPU Smoke Controller
+      - Kaggle GPU Tiny Transformer Inference Controller
+      - Verify Submitted Private Kaggle GPU Smoke
+      - Verify Submitted Tiny GPU Inference and Checkpoint
+      - Step 10.5E Read Only End-to-End Synthetic Infrastructure Audit
+      - Pretrained Medical Model License Audit - No Downloads
+      - MiniLM Pinned Model Metadata and GPU Feasibility - No Weights
+      - Scheduled Synthetic Kaggle Telegram Monitor
+    types: [completed]
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [poll, smoke]
+        default: poll
+        description: "Poll approved Kaggle jobs (default), or resend setup smoke only if not yet sent"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: universal-synthetic-research-telegram-alerts
+  cancel-in-progress: false
+
+jobs:
+  alerts:
+    if: >-
+      github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout trusted main only; do not execute triggering artifacts
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run alert security and deduplication unit tests
+        run: |
+          python -m compileall -q scripts tests
+          python -m unittest discover -s tests -p test_universal_telegram_alerts.py -v
+      - name: Check authorization and private bot configuration
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_LEDGER_TOKEN" || -z "$TELEGRAM_BOT_TOKEN" || -z "$TELEGRAM_CHAT_ID" ]]; then
+            echo "::error::Missing ledger token or private Telegram bot configuration"
+            exit 1
+          fi
+          echo "UNIVERSAL_ALERT_CREDENTIALS_PRESENT_NO_VALUES_PRINTED"
+      - name: One-time initial Telegram integration message (no GPU)
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'smoke')
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/universal_telegram_alerts.py --mode bootstrap
+      - name: Notify only allowlisted completed GitHub workflow runs
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/universal_telegram_alerts.py --mode github
+      - name: Decide whether any approved Kaggle job needs status polling
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'poll')
+        id: poll
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, "scripts")
+          from universal_telegram_alerts import read_ledger, WATCHED
+          state, _ = read_ledger(os.environ["GH_LEDGER_TOKEN"])
+          needed = any(
+              state["kaggle_events"][job]["last_event"] != f"{job}:complete"
+              for job in WATCHED
+          )
+          print("UNIVERSAL_ALERT_KAGGLE_POLL_NEEDED: " + str(needed).upper())
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("needed=" + str(needed).lower() + "\n")
+          PY
+      - name: Install Kaggle CLI ONLY when a pending approved job is registered
+        if: steps.poll.outputs.needed == 'true'
+        run: python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read Kaggle status and verify checkpoint before Telegram completion
+        if: steps.poll.outputs.needed == 'true'
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Kaggle secret missing"
+            exit 1
+          fi
+          python scripts/universal_telegram_alerts.py --mode poll --work-dir build/telegram-universal
+      - name: No new Kaggle job found; skip all Kaggle API and quota
+        if: steps.poll.outputs.needed == 'false'
+        run: echo "UNIVERSAL_ALERTS ALL_REGISTERED_HISTORICAL_COMPLETIONS_SUPPRESSED"
