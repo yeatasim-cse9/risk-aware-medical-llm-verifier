@@ -1,0 +1,79 @@
+name: MedHallu Public Metadata Snapshot - No Dataset Rows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/medhallu-public-metadata-snapshot.yml
+      - src/research_data/manager.py
+      - scripts/MC01_dataset_manager.py
+      - scripts/verify_medhallu_audit.py
+      - tests/test_master_data_modules.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medhallu-public-metadata-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact code revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Test public metadata allowlist and integrity checks offline
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_master_data_modules.py -v
+          python -m unittest discover -s tests -p test_e1_readiness.py -v
+      - name: Fetch official Hub and dataset-viewer METADATA ONLY
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python scripts/MC01_dataset_manager.py \
+            --source-commit "$GITHUB_SHA" \
+            --output build/medhallu-public-metadata
+          python scripts/verify_medhallu_audit.py \
+            build/medhallu-public-metadata \
+            --expected-commit "$GITHUB_SHA"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("build/medhallu-public-metadata/medhallu_metadata_manifest.json")
+          d = json.loads(p.read_text())
+          assert d["dataset_rows_downloaded"] is False
+          assert d["raw_dataset_files_downloaded"] is False
+          assert d["scientific_experiments_executed"] is False
+          assert d["human_license_review"] == "required"
+          assert d["native_label_mapping"] is None
+          assert set(d["configurations"]) == {"pqa_labeled", "pqa_artificial"}
+          for name, record in d["configurations"].items():
+              assert record["native_labels_confirmed"] is False
+              assert record["grouping_id_confirmed"] is False
+              print(f"MEDHALLU_METADATA_CONFIG {name} splits={len(record['splits'])} fields={len(record['native_column_names'])}")
+          print("MEDHALLU_METADATA_REVISION_SHA="+d["dataset_revision_sha"])
+          print("MEDHALLU_METADATA_LICENSE_DECLARED="+str(d["declared_license"]))
+          print("MEDHALLU_METADATA_SUCCESS_NO_ROWS_NO_E1_EXECUTION")
+          PY
+      - name: Retain sanitized immutable audit evidence, not dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: medhallu-public-metadata-${{ github.run_id }}
+          path: build/medhallu-public-metadata/medhallu_metadata_manifest.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Explicitly keep E1 scientific execution blocked
+        run: |
+          set -euo pipefail
+          python scripts/e1_readiness.py
+          echo "E1_STILL_BLOCKED_PENDING_LICENSE_BYTES_LABEL_SPLITS_AND_APPROVAL"
