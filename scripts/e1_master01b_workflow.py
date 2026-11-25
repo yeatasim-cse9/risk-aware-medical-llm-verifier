@@ -17,10 +17,11 @@ import e1_master01_validation_kaggle as base
 import e1_master01b_kaggle as m
 
 ROOT=Path(__file__).resolve().parents[1]
-KERNEL="yeatasimbillah/medical-llm-e1-master01b-gpu-v1"
+PREVIOUS_KERNEL="yeatasimbillah/medical-llm-e1-master01b-gpu-v1"
+KERNEL="yeatasimbillah/medical-llm-e1-master01b-gpu-v2"
 BASE_SHA="11d803b06167689df6a3caa290be69a8b9b519ee9e83ec0d5de619e95a43761e"
-RUNNER_SHA="bd4e454e0f2ad47d7988fb299979199f025f7c0e887b82888fa50ae7029e9e7a"
-RUNNER_COMMIT="5dca214a35512370e24eae05dd12aa8fafd8a60c"
+RUNNER_SHA="89bdecce4109aa0cc4dc90f1f8a537ce085f13a707c9c0df9258d36625f62e2f"
+RUNNER_COMMIT="bdf92f6c940c8f40064d1f44f6bff5dda04dfd5e"
 SIZES=m.SIZES
 FLAGS=("clinical_adjudication_completed","article_lineage_fully_certified",
        "complete_semantic_leakage_excluded","split_changed","final_split_approved",
@@ -67,15 +68,21 @@ except Exception as exc:
              "INVALID_WINDOW_INPUT","WINDOW_LIMIT_EXCEEDED_NO_TRUNCATION_ALLOWED","WINDOW_COVERAGE_FAILURE",
              "TOKENIZER_SPECIAL_TOKEN_POLICY","WINDOW_OVERFLOW","INCOMPLETE_WINDOW_COVERAGE",
              "INVALID_EMBEDDING","INVALID_WINDOW_COUNT","PAIR_SHAPE","PAIR_COVERAGE_FAILURE",
-             "NONFINITE_SIMILARITY","REPORT_SIZE"}
+             "NONFINITE_SIMILARITY","REPORT_SIZE","BERT_SPECIAL_ID_POLICY","BERT_FRAMING_MISMATCH",
+             "BATCH_WINDOW_POLICY","MODEL_SMOKE_COVERAGE","MODEL_SMOKE_PAIR"}
     code=str(exc) if type(exc) is ValueError else ""
     print("MASTER01B_FAILED_STAGE="+runner.STAGE,flush=True)
+    kind=type(exc).__name__
+    kinds={"AttributeError","TypeError","ValueError","RuntimeError","NotImplementedError",
+           "KeyError","IndexError","ImportError","OSError","OutOfMemoryError","MemoryError",
+           "ModuleNotFoundError","HTTPError","TimeoutError"}
+    print("MASTER01B_FAILED_KIND="+(kind if kind in kinds else "OTHER"),flush=True)
     print("MASTER01B_FAILED_CODE="+(code if code in allowed else "SAFE_FAILURE_REQUIRES_REVIEW"),flush=True)
     sys.exit(1)
 """%(previous,body,BASE_SHA,RUNNER_SHA,RUNNER_SHA)
     compile(wrapper,"runner.py","exec")
     (out/"runner.py").write_text(wrapper,encoding="utf-8")
-    meta={"id":KERNEL,"title":"medical-llm-e1-master01b-gpu-v1","code_file":"runner.py",
+    meta={"id":KERNEL,"title":"medical-llm-e1-master01b-gpu-v2","code_file":"runner.py",
           "language":"python","kernel_type":"script","is_private":True,
           "enable_gpu":True,"enable_tpu":False,"enable_internet":True,
           "dataset_sources":[],"competition_sources":[],"kernel_sources":[],"model_sources":[]}
@@ -98,6 +105,7 @@ def telegram(message):
 def preflight():
     q=subprocess.run(["kaggle","quota"],capture_output=True,timeout=90)
     require(q.returncode==0,"QUOTA_ENDPOINT_UNAVAILABLE")
+    require(check(PREVIOUS_KERNEL,"any")=="error","PREVIOUS_V1_NOT_CONFIRMED_ERROR")
     require(check(KERNEL,"any")=="missing","DUPLICATE_MASTER01B_KERNEL_BLOCKED")
     print("MASTER01B_PREFLIGHT_OK_QUOTA_AMOUNT_NOT_CERTIFIED")
 
@@ -241,7 +249,7 @@ def verify(out):
     require(check(KERNEL,"any")=="complete","REMOTE_NOT_COMPLETE")
     with tempfile.TemporaryDirectory() as tmp:
         p=subprocess.run(["kaggle","kernels","output",KERNEL,"-p",tmp,
-                          "--file-pattern","^master01b_full_context_v1[.]json$"],
+                          "--file-pattern","^master01b_full_context_v2[.]json$"],
                          capture_output=True,timeout=180)
         require(p.returncode==0,"REMOTE_AGGREGATE_DOWNLOAD_FAILED")
         safe=validate_report(Path(tmp)/m.REPORT)
