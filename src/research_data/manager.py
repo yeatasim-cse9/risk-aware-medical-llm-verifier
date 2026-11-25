@@ -32,6 +32,7 @@ def fetch_public_metadata(url: str) -> dict:
     if not (
         url == HUB
         or url == VIEWER + "/splits?" + urlencode({"dataset": DATASET_ID})
+        or url == VIEWER + "/size?" + urlencode({"dataset": DATASET_ID})
         or any(url == VIEWER + "/info?" + urlencode({"dataset": DATASET_ID, "config": c}) for c in CONFIGS)
     ):
         raise PermissionError("Non-metadata or unapproved network endpoint blocked")
@@ -58,6 +59,7 @@ def build_report(source_commit: str, fetch=fetch_public_metadata) -> dict:
     validate_cloud_dataset(DATASET_ID)
     hub = fetch(HUB)
     splits = fetch(VIEWER + "/splits?" + urlencode({"dataset": DATASET_ID}))
+    sizes = fetch(VIEWER + "/size?" + urlencode({"dataset": DATASET_ID}))
     if hub.get("id") != DATASET_ID:
         raise ValueError("Hugging Face source identity mismatch")
     revision = hub.get("sha")
@@ -66,6 +68,22 @@ def build_report(source_commit: str, fetch=fetch_public_metadata) -> dict:
     if not isinstance(splits.get("splits"), list):
         raise ValueError("Dataset-viewer split metadata missing")
     listed = splits["splits"]
+    details = sizes.get("size")
+    if not isinstance(details, dict) or not isinstance(details.get("splits"), list):
+        raise ValueError("Dataset-viewer /size split counts missing")
+    if sizes.get("partial") is True or details.get("partial") is True:
+        raise ValueError("Partial source sizes are insufficient for a frozen manifest")
+    count_map = {}
+    for entry in details["splits"]:
+        if not isinstance(entry, dict):
+            raise ValueError("Invalid /size split record")
+        key = (entry.get("config"), entry.get("split"))
+        count = entry.get("num_rows")
+        if not all(isinstance(v, str) and v for v in key) or type(count) is not int or count < 0:
+            raise ValueError("Invalid /size split row count")
+        if key in count_map:
+            raise ValueError("Duplicate /size split")
+        count_map[key] = count
     configurations = {}
     for config in CONFIGS:
         data = fetch(VIEWER + "/info?" + urlencode({"dataset": DATASET_ID, "config": config}))
@@ -79,10 +97,10 @@ def build_report(source_commit: str, fetch=fetch_public_metadata) -> dict:
         for entry in listed:
             if not isinstance(entry, dict) or entry.get("config") != config:
                 continue
-            name, count = entry.get("split"), entry.get("num_rows")
-            if not isinstance(name, str) or not name or type(count) is not int or count < 0:
-                raise ValueError("Invalid split metadata for " + config)
-            rows.append({"name": name, "declared_rows": count})
+            name = entry.get("split")
+            if not isinstance(name, str) or not name or (config, name) not in count_map:
+                raise ValueError("Missing matching /size record for " + config)
+            rows.append({"name": name, "declared_rows": count_map[(config, name)]})
         if not rows:
             raise ValueError("Configuration missing in published splits: " + config)
         configurations[config] = {
@@ -111,6 +129,7 @@ def build_report(source_commit: str, fetch=fetch_public_metadata) -> dict:
         "scientific_experiments_executed": False,
         "limitations": [
             "Hub metadata is not a local data-file integrity proof",
+            "Dataset-viewer metadata is not cryptographically tied to the reported Hub revision",
             "Native labels and grouping identifiers require subsequent authorized row audit",
             "Neither original train split is a scientifically frozen evaluation split",
             "No physician-gold or claim-level labels inferred",
