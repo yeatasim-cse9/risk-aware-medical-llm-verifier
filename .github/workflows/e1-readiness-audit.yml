@@ -1,0 +1,36 @@
+name: E1 MedHallu Readiness Audit - No Dataset or Kaggle Launch
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/e1_readiness.py
+      - tests/test_e1_readiness.py
+      - configs/experiment-registry.json
+      - configs/dataset-sources.json
+      - configs/e1-approved-protocol.json
+      - .github/workflows/e1-readiness-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code only
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Offline gate tests
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_e1_readiness.py -v
+          python scripts/e1_readiness.py
+          echo "E1_READINESS_AUDIT_NO_KAGGLE_SUBMISSION_NO_DATA_DOWNLOAD"
