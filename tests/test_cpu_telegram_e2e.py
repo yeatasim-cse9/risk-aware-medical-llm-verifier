@@ -73,9 +73,9 @@ class CpuTelegramE2ETests(unittest.TestCase):
         key = "cpu-telegram-e2e-v1"
         self.assertEqual(WATCHED[key]["kernel"], KERNEL)
         self.assertEqual(data["kaggle_events"][key], {"last_event": None, "delivery": "none"})
-        with patch("universal_telegram_alerts.read_ledger", return_value=(data, "a"*40)), \\
-             patch("universal_telegram_alerts.check", return_value="missing") as check, \\
-             patch("universal_telegram_alerts.send_message") as send, \\
+        with patch("universal_telegram_alerts.read_ledger", return_value=(data, "a"*40)), \
+             patch("universal_telegram_alerts.check", return_value="missing") as check, \
+             patch("universal_telegram_alerts.send_message") as send, \
              patch("universal_telegram_alerts.subprocess.run") as execute:
             self.assertEqual(poll_kaggle("GH", "BOT", "123456", Path("unused")),
                              "kaggle_new_alerts_0")
