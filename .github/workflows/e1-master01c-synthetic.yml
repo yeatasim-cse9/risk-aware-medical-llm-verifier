@@ -1,0 +1,30 @@
+name: E1 MASTER 01C Synthetic Preparation
+on:
+  pull_request:
+    paths:
+      - scripts/e1_master01c*
+      - tests/test_e1_master01c*
+      - docs/E1_MASTER01C*
+      - .github/workflows/e1-master01c-synthetic.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/e1_master01c*
+      - tests/test_e1_master01c*
+      - docs/E1_MASTER01C*
+      - .github/workflows/e1-master01c-synthetic.yml
+permissions:
+  contents: read
+jobs:
+  master01c-synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Synthetic scientific gate tests (no data or secrets)
+        run: python -m unittest discover -s tests -p 'test_e1_master01c*.py' -v
