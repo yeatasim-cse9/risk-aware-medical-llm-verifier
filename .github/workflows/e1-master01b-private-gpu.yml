@@ -28,7 +28,7 @@ on:
       confirm_one_gpu_run:
         type: boolean
         default: false
-        description: Approve exactly ONE new private Kaggle GPU audit after checking quota
+        description: Approve ONE v2 recovery GPU audit after checking quota; v1 must be error
 
 permissions:
   contents: read
@@ -51,9 +51,10 @@ jobs:
         run: |
           python -m pip install numpy==2.2.6
           python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install transformers==5.0.0
       - name: Run exact synthetic GPU algorithm on CPU without skips
         run: |
-          python -c 'import torch, numpy; assert not torch.cuda.is_available()'
+          python -c 'import torch, numpy; from tokenizers import Tokenizer; from transformers import AutoTokenizer, BertConfig, BertModel; assert not torch.cuda.is_available()'
           python -m unittest discover -s tests -p test_e1_master01b.py -v
   master01b:
     needs: synthetic-window-tests
