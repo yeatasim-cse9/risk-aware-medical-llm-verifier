@@ -20,11 +20,11 @@ on:
         required: true
       confirm_private_dataset_rights:
         type: boolean
-        description: "Submit only: I reviewed MedHallu/PubMedQA MIT terms AND NLM abstract copyright; private Kaggle analysis authorized, no redistribution"
+        description: "Submit/retry_failed only: I reviewed MedHallu/PubMedQA MIT terms AND NLM abstract copyright; private Kaggle analysis authorized, no redistribution"
         default: false
       confirm_cpu_quota:
         type: boolean
-        description: "Submit only: I authorize this one private CPU-only Kaggle run"
+        description: "Submit/retry_failed only: I authorize this one private CPU-only Kaggle run"
         default: false
       source_commit:
         type: string
@@ -70,7 +70,7 @@ jobs:
           python -m unittest discover -s tests -p test_medhallu_native_audit.py -v
           python -m unittest discover -s tests -p test_e1_readiness.py -v
       - name: Build private code-only Kaggle CPU audit package
-        if: github.event_name == 'push' || inputs.operation == 'prepare' || (inputs.operation == 'submit' || inputs.operation == 'retry_failed') || inputs.operation == 'retry_failed'
+        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit' || inputs.operation == 'retry_failed'
         run: |
           set -euo pipefail
           python scripts/medhallu_private_rows.py build build/medhallu-native-private --source-commit "$(git rev-parse HEAD)"
@@ -99,7 +99,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Require Kaggle secret and pinned CLI for read/submit operations
-        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || (inputs.operation == 'submit' || inputs.operation == 'retry_failed') || inputs.operation == 'retry_failed' || inputs.operation == 'status' || inputs.operation == 'verify')
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'retry_failed' || inputs.operation == 'status' || inputs.operation == 'verify')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
@@ -110,7 +110,7 @@ jobs:
           fi
           python -m pip install "kaggle==2.2.5" "six==1.17.0"
       - name: Check Kaggle notebook state read-only
-        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || (inputs.operation == 'submit' || inputs.operation == 'retry_failed') || inputs.operation == 'retry_failed' || inputs.operation == 'status')
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'retry_failed' || inputs.operation == 'status')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           OPERATION: ${{ inputs.operation }}
