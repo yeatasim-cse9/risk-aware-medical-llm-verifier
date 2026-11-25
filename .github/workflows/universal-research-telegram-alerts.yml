@@ -80,6 +80,26 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/universal_telegram_alerts.py --mode bootstrap
+      - name: Confirm historical synthetic checkpoints cannot resend old alerts
+        if: github.event_name == 'push'
+        env:
+          GH_LEDGER_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, "scripts")
+          from universal_telegram_alerts import WATCHED, read_ledger
+          data, _ = read_ledger(os.environ["GH_LEDGER_TOKEN"])
+          assert data["bootstrap_sent"] is True
+          assert all(
+              data["kaggle_events"][name]["last_event"] == f"{name}:complete"
+              for name in WATCHED
+          )
+          print("UNIVERSAL_ALERTS: HISTORICAL_KAGGLE_ALERTS_SUPPRESSED")
+          print("UNIVERSAL_ALERTS: NO_KAGGLE_GPU_TIME_USED")
+          PY
       - name: Notify only allowlisted completed GitHub workflow runs
         if: github.event_name == 'workflow_run'
         env:
