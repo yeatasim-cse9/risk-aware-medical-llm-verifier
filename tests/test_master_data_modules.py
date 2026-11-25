@@ -22,9 +22,14 @@ def metadata_fixture(url):
         return {"id": DATASET_ID, "sha": REVISION, "cardData": {"license": "mit"}}
     if url == VIEWER + "/splits?" + urlencode({"dataset": DATASET_ID}):
         return {"splits": [
+            {"config": "pqa_labeled", "split": "train"},
+            {"config": "pqa_artificial", "split": "train"},
+        ]}
+    if url == VIEWER + "/size?" + urlencode({"dataset": DATASET_ID}):
+        return {"size": {"splits": [
             {"config": "pqa_labeled", "split": "train", "num_rows": 1000},
             {"config": "pqa_artificial", "split": "train", "num_rows": 9000},
-        ]}
+        ]}, "partial": False}
     if url.startswith(VIEWER + "/info?"):
         return {"dataset_info": {"features": {
             "Question": {"dtype": "string"}, "Hallucinated Answer": {"dtype": "string"},
@@ -41,6 +46,7 @@ class MasterDataTests(unittest.TestCase):
         self.assertEqual(m["configurations"]["pqa_labeled"]["native_column_names"],
                          ["Hallucinated Answer", "Question"])
         self.assertEqual(m["source_code_git_sha"], COMMIT)
+        self.assertEqual(m["configurations"]["pqa_artificial"]["splits"][0]["declared_rows"], 9000)
 
     def test_manifest_tamper_rejected(self):
         m = build_report(COMMIT, metadata_fixture)
