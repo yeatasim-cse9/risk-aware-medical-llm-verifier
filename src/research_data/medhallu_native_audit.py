@@ -70,6 +70,8 @@ def audit_native_rows(rows_by_config: dict[str, list[dict]]) -> dict:
             if (not isinstance(knowledge, list) or len(knowledge) > MAX_KNOWLEDGE
                     or any(not isinstance(item, str) or len(item) > MAX_CHARS for item in knowledge)):
                 raise NativeAuditError("NATIVE_KNOWLEDGE_FIELD_INVALID")
+            if any(not _norm(row[field]) for field in ("Question", "Ground Truth", "Hallucinated Answer")):
+                raise NativeAuditError("EMPTY_NORMALIZED_FIELD")
             qhash = _sha(row["Question"])
             ghash = _sha(row["Ground Truth"])
             hhash = _sha(row["Hallucinated Answer"])
@@ -124,6 +126,42 @@ def verify_report(report: dict) -> None:
     )
     if any(report.get(key) is not False for key in expected):
         raise NativeAuditError("UNAUTHORIZED_SCIENTIFIC_OR_LICENSE_CLAIM")
+    allowed = {
+        "schema_version", "dataset_id", "audit_kind", "config_rows",
+        "unique_questions_by_config", "unique_questions_total",
+        "questions_repeated_within_or_across_configs",
+        "questions_shared_across_configs",
+        "ground_truth_equals_hallucinated_answer_pairs",
+        "identical_record_pairs", "native_fields_count",
+        "native_label_mapping_approved", "source_lineage_ids_verified",
+        "leakage_safe_train_dev_test_created",
+        "license_and_pubmedqa_rights_verified",
+        "scientific_experiments_executed", "raw_rows_or_values_exported",
+        "status",
+    }
+    if set(report) != allowed or type(report["schema_version"]) is not int or report["schema_version"] != 1:
+        raise NativeAuditError("UNEXPECTED_REPORT_FIELDS")
+    integers = (
+        "unique_questions_total", "questions_repeated_within_or_across_configs",
+        "questions_shared_across_configs",
+        "ground_truth_equals_hallucinated_answer_pairs",
+        "identical_record_pairs", "native_fields_count",
+    )
+    if any(type(report[k]) is not int or report[k] < 0 or report[k] > MAX_ROWS * len(CONFIGS) for k in integers):
+        raise NativeAuditError("INVALID_AGGREGATE_COUNTER")
+    if report["native_fields_count"] != 6:
+        raise NativeAuditError("INVALID_NATIVE_SCHEMA_COUNT")
+    if not isinstance(report.get("unique_questions_by_config"), dict) or set(report["unique_questions_by_config"]) != set(CONFIGS):
+        raise NativeAuditError("INVALID_UNIQUE_QUESTION_COUNTS")
+    for counts in (report["config_rows"], report["unique_questions_by_config"]):
+        if not isinstance(counts, dict) or set(counts) != set(CONFIGS):
+            raise NativeAuditError("INVALID_COUNTER_MAP")
+        if any(type(n) is not int or n < 0 or n > MAX_ROWS for n in counts.values()):
+            raise NativeAuditError("INVALID_CONFIG_COUNT")
+    if sum(report["config_rows"].values()) < 2:
+        raise NativeAuditError("INVALID_TOTAL_RECORDS")
+    if report["unique_questions_total"] > sum(report["config_rows"].values()):
+        raise NativeAuditError("INVALID_UNIQUE_QUESTION_TOTAL")
     if report.get("dataset_id") != DATASET or report.get("status") != "REQUIRES_REVIEW_NO_SCIENTIFIC_EXPERIMENT":
         raise NativeAuditError("INVALID_DATASET_OR_STATUS")
     if set(report.get("config_rows", {})) != set(CONFIGS):
@@ -132,7 +170,7 @@ def verify_report(report: dict) -> None:
 
 def write_aggregate(report: dict, destination: Path) -> None:
     verify_report(report)
-    if destination.exists():
+    if destination.exists() or destination.is_symlink():
         raise NativeAuditError("REPORT_OVERWRITE_FORBIDDEN")
     if destination.parent.exists() and destination.parent.is_symlink():
         raise NativeAuditError("SYMLINK_DESTINATION_FORBIDDEN")
