@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+from telegram_notification_test import NotificationError
 from universal_telegram_alerts import (
     REPO, LEDGER_PATH, WATCHED, AlertError, validate_ledger,
     bootstrap, github_alert_payload, handle_github_event, poll_kaggle,
