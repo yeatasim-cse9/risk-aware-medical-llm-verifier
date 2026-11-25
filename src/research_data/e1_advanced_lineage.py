@@ -219,7 +219,9 @@ def audit_lineage(
             exact_knowledge_hash_by_split[sha256(knowledge.encode("utf-8")).hexdigest()].add(split)
         same = source_index[config].get(q_hash, [])
         alternate = source_index[CONFIGS[1] if config == CONFIGS[0] else CONFIGS[0]].get(q_hash, [])
-        candidates = same or alternate
+        # A same-config match must not hide a conflicting PMID from the
+        # other PubMedQA config. Any distinct source IDs remain ambiguous.
+        candidates = same + alternate
         pmids = {pubid for pubid, _ in candidates}
         if not pmids:
             source_match["unmatched"] += 1
@@ -361,3 +363,45 @@ def validate_report(report: dict) -> None:
         raise LineageAuditError("LINEAGE_CONFIG_TOTAL_MISMATCH")
     if len(json.dumps(report, sort_keys=True)) > MAX_REPORT_BYTES:
         raise LineageAuditError("LINEAGE_REPORT_OVERSIZED")
+
+def validate_near_report(report: dict, eligible_rows: int) -> None:
+    """Strictly allowlist privacy-safe advanced n-gram aggregate fields."""
+    allowed = {
+        "method", "candidate_pairs_compared", "candidate_limit",
+        "candidate_limit_reached", "high_word_trigram_pairs",
+        "high_char_fivegram_pairs", "high_overlap_unique_pairs",
+        "short_questions_in_scope", "short_question_pairs_compared",
+        "common_blocks_skipped", "complete_pairwise_search",
+        "semantic_paraphrase_search_performed",
+    }
+    if not isinstance(report, dict) or set(report) != allowed:
+        raise LineageAuditError("ADVANCED_NEAR_REPORT_FIELD_SET_CHANGED")
+    if report["method"] != "bounded_rare_word_trigram_and_short_question_char5":
+        raise LineageAuditError("ADVANCED_NEAR_METHOD_CHANGED")
+    if type(eligible_rows) is not int or not 0 < eligible_rows <= MAX_MEDHALLU_ROWS:
+        raise LineageAuditError("ADVANCED_NEAR_ELIGIBLE_ROWS_INVALID")
+    for flag in ("complete_pairwise_search", "semantic_paraphrase_search_performed"):
+        if report[flag] is not False:
+            raise LineageAuditError("UNSUPPORTED_EXHAUSTIVE_OR_SEMANTIC_CLAIM")
+    if type(report["candidate_limit_reached"]) is not bool:
+        raise LineageAuditError("INVALID_NEAR_PAIR_CAP_FLAG")
+    numeric = allowed - {
+        "method", "candidate_limit_reached",
+        "complete_pairwise_search", "semantic_paraphrase_search_performed",
+    }
+    if any(type(report[name]) is not int or report[name] < 0 for name in numeric):
+        raise LineageAuditError("INVALID_ADVANCED_NEAR_COUNTER")
+    if not 1 <= report["candidate_limit"] <= MAX_CANDIDATE_PAIRS:
+        raise LineageAuditError("ADVANCED_NEAR_BUDGET_OUT_OF_POLICY")
+    total = report["candidate_pairs_compared"]
+    if (total > report["candidate_limit"] or
+            report["high_word_trigram_pairs"] > total or
+            report["high_char_fivegram_pairs"] > total or
+            report["high_overlap_unique_pairs"] > total or
+            report["short_question_pairs_compared"] > total or
+            report["short_questions_in_scope"] > eligible_rows):
+        raise LineageAuditError("ADVANCED_NEAR_COUNTERS_NOT_CONSISTENT")
+    if report["high_overlap_unique_pairs"] < max(
+        report["high_word_trigram_pairs"], report["high_char_fivegram_pairs"]
+    ):
+        raise LineageAuditError("ADVANCED_NEAR_UNION_COUNT_INVALID")
