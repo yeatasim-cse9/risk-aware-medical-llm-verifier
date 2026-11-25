@@ -1,0 +1,159 @@
+name: MedHallu Metadata Audit Controller
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/research_data/**
+      - scripts/build_medhallu_audit.py
+      - scripts/verify_medhallu_audit.py
+      - .github/workflows/medhallu-metadata-audit.yml
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "prepare, preflight, submit, status, or verify"
+        type: choice
+        options: [prepare, preflight, submit, status, verify]
+        default: prepare
+        required: true
+      confirm_cpu_quota:
+        description: "For submit: I approve use of Kaggle CPU notebook resources"
+        type: boolean
+        default: false
+      source_commit:
+        description: "For verify: exact submitted 40-character Git SHA"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medhallu-metadata-controller
+  cancel-in-progress: false
+
+jobs:
+  metadata-stage:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Require exact submitted commit for verification
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+        shell: bash
+        env:
+          PINNED_SHA: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$PINNED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Exact 40-char source SHA required"
+            exit 1
+          fi
+      - name: Checkout code at pinned source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.operation == 'verify' && inputs.source_commit || github.sha }}
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Test MC01, MC02 and Kaggle package without credentials
+        run: |
+          python -m compileall -q src/research_data scripts/MC01_dataset_manager.py scripts/MC02_data_audit.py scripts/build_medhallu_audit.py scripts/verify_medhallu_audit.py
+          python -m unittest discover -s tests -p test_master_data_modules.py -v
+          python -m unittest discover -s tests -p test_medhallu_kaggle_package.py -v
+      - name: Build code-only private CPU metadata package
+        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_medhallu_audit.py --commit "$(git rev-parse HEAD)" --out build/medhallu-metadata
+          python -m py_compile build/medhallu-metadata/runner.py build/medhallu-metadata/manager.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("build/medhallu-metadata")
+          m = json.loads((p/"kernel-metadata.json").read_text())
+          assert m["is_private"] is True and m["enable_gpu"] is False
+          assert m["enable_internet"] is True and not m["dataset_sources"]
+          assert {f.name for f in p.iterdir()} == {"runner.py", "manager.py", "kernel-metadata.json", "__pycache__"}
+          print("METADATA_ONLY_PRIVATE_CPU_PACKAGE_VALIDATED")
+          PY
+      - name: Retain code-only preparation artifact
+        if: github.event_name == 'push' || inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: medhallu-metadata-code-${{ github.run_id }}
+          path: |
+            build/medhallu-metadata/runner.py
+            build/medhallu-metadata/manager.py
+            build/medhallu-metadata/kernel-metadata.json
+          retention-days: 7
+      - name: Install Kaggle CLI for controller operations
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status' || inputs.operation == 'verify')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::KAGGLE_API_TOKEN is not configured"
+            exit 1
+          fi
+          python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Kaggle quota read-only preflight
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          kaggle quota > /dev/null 2>&1 || { echo "::error::Quota query failed; no submission"; exit 1; }
+          echo "KAGGLE_QUOTA_ENDPOINT_OK; CPU availability not guaranteed"
+      - name: Require approval and empty remote notebook slot
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        shell: bash
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          APPROVED: ${{ inputs.confirm_cpu_quota }}
+        run: |
+          set -euo pipefail
+          if [[ "$APPROVED" != "true" ]]; then
+            echo "::error::Explicit CPU resource approval required"
+            exit 1
+          fi
+          python - <<'PY'
+          from scripts.kaggle_status import check
+          if check("yeatasimbillah/medical-llm-medhallu-metadata-audit", "any") != "missing":
+              raise SystemExit("REMOTE_METADATA_NOTEBOOK_ALREADY_EXISTS; no overwrite")
+          print("MEDHALLU_METADATA_REMOTE_SLOT_FREE")
+          PY
+      - name: Submit private metadata-only CPU notebook
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "METADATA_ONLY_SOURCE_COMMIT: $(git rev-parse HEAD)"
+          kaggle kernels push -p build/medhallu-metadata
+      - name: Read-only remote notebook status
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'status'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/kaggle_status.py yeatasimbillah/medical-llm-medhallu-metadata-audit --require any
+      - name: Download and verify safe metadata output only
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-medhallu-metadata-audit --require complete
+          mkdir -p build/medhallu-metadata-result
+          kaggle kernels output yeatasimbillah/medical-llm-medhallu-metadata-audit -p build/medhallu-metadata-result
+          python scripts/verify_medhallu_audit.py build/medhallu-metadata-result --expected-commit "$(git rev-parse HEAD)"
+      - name: Retain verified public metadata manifest only
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medhallu-verified-metadata-${{ github.run_id }}
+          path: build/medhallu-metadata-result/medhallu_metadata_manifest.json
+          retention-days: 14
