@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "kind": "prior_independently_verified_kaggle_aggregate_evidence",
+  "dataset_id": "UTAustin-AIHealth/MedHallu",
+  "dataset_revision_sha": "515060458a945c633debc6fd5baac7764416b724",
+  "source_code_git_sha": "14d916650c13ed57275558237fde52916a9a5fc5",
+  "verified_github_actions_run_id": 45590480345,
+  "artifact_id": 15010069180,
+  "aggregate_report_sha256": "ac37d9c07b494afd905ea36ecce7dc2eeb7c9e463a7d01871f5e6dbfea053608",
+  "source_files": {
+    "pqa_artificial": {
+      "relative_file": "pqa_artificial/train-00000-of-00001.parquet",
+      "sha256": "70de8ce7f89a38314fa231a12e45168f3ee1aa591e8a38f6556b89aa8b1ca513",
+      "size_bytes": 10283429,
+      "rows": 9000
+    },
+    "pqa_labeled": {
+      "relative_file": "pqa_labeled/train-00000-of-00001.parquet",
+      "sha256": "ac963f9aaeb163f494edd4dbfec04086c3e35c7cc55e3f9c8b1d7b31188fa34c",
+      "size_bytes": 1116475,
+      "rows": 1000
+    }
+  },
+  "observed_aggregate": {
+    "unique_questions_total": 9999,
+    "questions_repeated_within_or_across_configs": 1,
+    "questions_shared_across_configs": 0,
+    "ground_truth_equals_hallucinated_answer_pairs": 1,
+    "identical_record_pairs": 0
+  },
+  "label_semantics_adjudicated": false,
+  "pubmedqa_lineage_verified": false,
+  "leakage_safe_final_splits_frozen": false,
+  "scientific_experiments_executed": false,
+  "note": "Evidence is verified saved aggregate from prior private Kaggle run. Does not include raw dataset rows or authorization to run E1."
+}
