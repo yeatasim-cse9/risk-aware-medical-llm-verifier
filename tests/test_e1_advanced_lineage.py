@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 from research_data.e1_advanced_lineage import (
-    pubmed_index, audit_lineage, validate_report, advanced_near_screen,
+    pubmed_index, audit_lineage, validate_report, advanced_near_screen, validate_near_report,
     LineageAuditError, CONFIGS,
 )
 import e1_pubmedqa_lineage_kaggle as driver
@@ -103,6 +103,24 @@ class AdvancedLineageTests(unittest.TestCase):
         self.assertEqual(d["ambiguous_multiple_pubids_parent_rows"], 1)
         self.assertEqual(d["unmatched_parent_rows"], 1)
 
+    def test_source_conflict_across_configs_is_ambiguous_not_trusted(self):
+        med = {
+            "pqa_labeled": [row("same question in two PubMedQA configurations")],
+            "pqa_artificial": [row("artificial one more source question")],
+        }
+        pqa = {
+            "pqa_labeled": [source(701, "same question in two PubMedQA configurations")],
+            "pqa_artificial": [
+                source(702, "same question in two PubMedQA configurations"),
+                source(703, "artificial one more source question"),
+            ],
+        }
+        a = {("pqa_labeled", 0): "train", ("pqa_artificial", 0): "test"}
+        d = audit_lineage(med, a, pubmed_index(pqa), official_test())
+        self.assertEqual(d["ambiguous_multiple_pubids_parent_rows"], 1)
+        self.assertEqual(d["matched_unique_pubid_parent_rows"], 1)
+        validate_report(d)
+
     def test_exact_text_hash_across_partitions_detected(self):
         med = {
             "pqa_labeled": [row("identical fake question", "same evidence text")],
@@ -141,6 +159,15 @@ class AdvancedLineageTests(unittest.TestCase):
         self.assertEqual(report["short_questions_in_scope"], 2)
         self.assertFalse(report["complete_pairwise_search"])
         self.assertFalse(report["semantic_paraphrase_search_performed"])
+        validate_near_report(report, 4)
+        altered = copy.deepcopy(report)
+        altered["semantic_paraphrase_search_performed"] = True
+        with self.assertRaises(LineageAuditError):
+            validate_near_report(altered, 4)
+        altered = copy.deepcopy(report)
+        altered["medical_text"] = "private"
+        with self.assertRaises(LineageAuditError):
+            validate_near_report(altered, 4)
         self.assertNotIn("fictional orange", json.dumps(report))
 
     def test_invalid_source_and_fabricated_approval_rejected(self):
