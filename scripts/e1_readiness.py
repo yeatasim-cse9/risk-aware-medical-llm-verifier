@@ -43,7 +43,7 @@ def check(root: Path = ROOT) -> dict:
                         "licenses_reviewed", "reproducibility_manifest_reviewed")
             if not isinstance(protocol, dict) or set(protocol) != set(required):
                 raise ValueError("invalid approved-protocol schema")
-            if protocol["schema_version"] != 1 or any(protocol[k] is not True for k in required[4:]):
+            if type(protocol["schema_version"]) is not int or protocol["schema_version"] != 1 or protocol["approved"] is not True or any(protocol[k] is not True for k in required[4:]):
                 raise ValueError("approvals incomplete")
             if not (isinstance(protocol["dataset_revision"], str) and SHA.fullmatch(protocol["dataset_revision"])):
                 raise ValueError("bad revision")
