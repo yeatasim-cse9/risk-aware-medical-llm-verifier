@@ -2,7 +2,8 @@
   "bootstrap_sent": true,
   "github_events": [
     "github:45548640501:1:failure",
-    "github:45571161515:1:started"
+    "github:45571161515:1:started",
+    "github:45571161515:1:success"
   ],
   "kaggle_events": {
     "cpu-a": {
