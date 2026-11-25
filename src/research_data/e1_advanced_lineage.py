@@ -197,7 +197,6 @@ def audit_lineage(
             len(original_test_pubids) != 500 or
             any(not isinstance(x, str) or not x.isdigit() for x in original_test_pubids)):
         raise LineageAuditError("ORIGINAL_PUBMEDQA_TEST_SET_INVALID")
-    source_rows_by_config = Counter()
     matched_splits_by_pubid = defaultdict(set)
     matched_parent_counts_by_pubid = Counter()
     source_match = Counter()
@@ -289,6 +288,28 @@ def audit_lineage(
 def validate_report(report: dict) -> None:
     if not isinstance(report, dict) or report.get("audit_kind") != "e1_pubmedqa_candidate_pubid_and_leakage_screen":
         raise LineageAuditError("LINEAGE_REPORT_TYPE_INVALID")
+    allowlisted = {
+        "audit_kind", "schema_version", "eligible_parent_rows_checked",
+        "matched_unique_pubid_parent_rows", "matched_same_configuration",
+        "matched_cross_configuration_fallback", "unmatched_parent_rows",
+        "ambiguous_multiple_pubids_parent_rows", "pubmedqa_context_exact_agreement_rows",
+        "pubmedqa_context_not_exact_rows", "pubmedqa_context_unavailable_rows",
+        "matched_unique_pubids", "source_pubids_spanning_candidate_partitions",
+        "parent_rows_affected_by_cross_split_source_pubid",
+        "official_pubmedqa_500_test_overlap_parent_rows_by_candidate_split",
+        "exact_question_fingerprint_groups_spanning_splits",
+        "exact_knowledge_fingerprint_groups_spanning_splits",
+        "medhallu_source_match_count_by_config",
+        "eligible_parent_rows_by_candidate_split",
+        "source_pubmedqa_pubids_exported",
+        "original_medical_questions_answers_exported",
+        "original_pubmedqa_500_test_ids_exported",
+        "complete_article_provenance_certified",
+        "final_leakage_safe_splits_approved",
+        "scientific_experiments_executed", "status",
+    }
+    if set(report) != allowlisted or type(report.get("schema_version")) is not int:
+        raise LineageAuditError("UNEXPECTED_LINEAGE_REPORT_FIELDS")
     if report.get("schema_version") != 1 or report.get("status") != "LINEAGE_EVIDENCE_SCREEN_ONLY_NO_FINAL_E1_APPROVAL":
         raise LineageAuditError("FALSE_LINEAGE_READY_STATUS")
     for k in (
