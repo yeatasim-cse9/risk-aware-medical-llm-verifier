@@ -117,10 +117,15 @@ def audit_rows(rows: list[dict], near_threshold: float = 0.82,
             group_index[(field, value)].add(i)
         for token in row["shingles"]:
             grams_index[token].add(i)
+    lineage_coverage = sum(bool(item["groups"]) for item in records)
+    grouping_gate_passed = lineage_coverage == len(records)
     report = {
         "schema_version": 1,
         "audit_kind": "cross_split_privacy_preserving",
         "passed": cross_pairs == 0,
+        "lineage_coverage_rows": lineage_coverage,
+        "grouping_gate_passed": grouping_gate_passed,
+        "ready_for_frozen_split": cross_pairs == 0 and grouping_gate_passed,
         "checked_rows": len(records),
         "split_sizes": dict(sorted(split_sizes.items())),
         "near_threshold": near_threshold,
