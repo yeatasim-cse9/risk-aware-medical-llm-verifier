@@ -3,7 +3,8 @@
   "github_events": [
     "github:45548640501:1:failure",
     "github:45571161515:1:started",
-    "github:45571161515:1:success"
+    "github:45571161515:1:success",
+    "github:45576739655:1:started"
   ],
   "kaggle_events": {
     "cpu-a": {
@@ -13,6 +14,10 @@
     "cpu-b": {
       "delivery": "historical_suppressed",
       "last_event": "cpu-b:complete"
+    },
+    "cpu-telegram-e2e-v1": {
+      "delivery": "none",
+      "last_event": null
     },
     "gpu-smoke": {
       "delivery": "historical_suppressed",
@@ -25,10 +30,6 @@
     "medhallu-metadata": {
       "delivery": "sent",
       "last_event": "medhallu-metadata:complete"
-    },
-    "cpu-telegram-e2e-v1": {
-      "last_event": null,
-      "delivery": "none"
     }
   },
   "schema_version": 1,
