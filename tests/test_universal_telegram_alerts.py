@@ -23,7 +23,12 @@ BASELINE = ROOT / LEDGER_PATH
 
 
 def ledger():
-    return json.loads(BASELINE.read_text(encoding="utf-8"))
+    # Independent deterministic fixture, even after the live bootstrap has
+    # legitimately changed the persistent file to bootstrap_sent=true.
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+    baseline["bootstrap_sent"] = False
+    baseline["github_events"] = []
+    return baseline
 
 
 def run_event(name="Kaggle GPU Tiny Transformer Inference Controller",
