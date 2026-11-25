@@ -234,6 +234,7 @@ def main() -> None:
         del source, pub_index, official_ids
         stage("ADVANCED_CROSS_SPLIT_NEAR_DUPLICATES")
         near = advanced.advanced_near_screen(med, assignments, candidate_limit=300_000)
+        advanced.validate_near_report(near, summary["eligible_parent_rows"])
         if near["candidate_pairs_compared"] > 300_000:
             raise PrivateLineageError("ADVANCED_SCREEN_CANDIDATE_LIMIT_EXCEEDED")
         del med, assignments
