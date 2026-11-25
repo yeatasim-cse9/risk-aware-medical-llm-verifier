@@ -104,9 +104,10 @@ jobs:
           assert data["bootstrap_sent"] is True
           assert all(
               data["kaggle_events"][name]["last_event"] == f"{name}:complete"
-              for name in WATCHED
+              for name in WATCHED if name != "medhallu-metadata"
           )
-          print("UNIVERSAL_ALERTS: HISTORICAL_KAGGLE_ALERTS_SUPPRESSED")
+          assert data["kaggle_events"]["medhallu-metadata"]["delivery"] != "historical_suppressed"
+          print("UNIVERSAL_ALERTS: HISTORICAL_SYNTHETIC_KAGGLE_ALERTS_SUPPRESSED")
           print("UNIVERSAL_ALERTS: NO_KAGGLE_GPU_TIME_USED")
           PY
       - name: Notify allowlisted GitHub workflow start and finish
