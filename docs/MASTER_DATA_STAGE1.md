@@ -18,7 +18,7 @@ No biomedical metric or patient data is produced by the synthetic CI unit tests.
 
 **MC02** accepts *already normalized, authorized* JSONL rows with:
 \`{"id":"nonempty","split":"train|dev|test","text":"nonempty","question_id":"optional","source_id":"optional","group_id":"optional"}\`.
-It reports aggregate exact/near textual and lineage-group overlap across splits. Reports **never include raw text, sample IDs or matched pairs**. If too many candidate pairs are generated, it fails closed. Near overlap does not exclude paraphrases or model-pretraining contamination.
+It reports aggregate exact/near textual and lineage-group overlap across splits. A frozen-split readiness gate also demands nonempty lineage/group IDs on **every** row; a no-overlap finding without lineage coverage never authorizes training. Reports **never include raw text, sample IDs or matched pairs**. If too many candidate pairs are generated, it fails closed. Near overlap does not exclude paraphrases or model-pretraining contamination.
 
 The metadata and data-audit stages are distinct. Do not use MC02 on restricted MedVAL in Kaggle. It is not an approved native MedHallu dataset loader, and no train/validation/test split has yet been created.
 

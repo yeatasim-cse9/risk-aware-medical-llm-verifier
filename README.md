@@ -72,3 +72,11 @@ For the safe GitHub Actions procedure see [GitHub → Kaggle Runbook](docs/GITHU
 This is a public code repository. **Never commit or upload credentialed PhysioNet / MedVAL data, patient text, credentials, or unauthorized data copies.** Kaggle and GitHub Actions are not an approved MedVAL environment by default. See [Security](docs/SECURITY.md) and [Reproducibility](docs/REPRODUCIBILITY.md).
 
 Academic research only — **not clinical advice**.
+
+## Stage 1: scientific dataset governance (2026-11-25)
+
+- Implemented **MC01 public metadata-only source manager** at `src/research_data/manager.py` and `scripts/MC01_dataset_manager.py`.
+- Implemented **MC02 cross-split exact/near/group leakage audit** at `src/research_data/audit.py` and `scripts/MC02_data_audit.py`.
+- Private Kaggle **CPU-only** MedHallu metadata controller at [MedHallu Metadata Audit Controller](.github/workflows/medhallu-metadata-audit.yml): push builds a **code-only** package; manual `submit` requires CPU approval, with `status` and `verify` steps.
+- Source split names are read from the official Hugging Face `/splits` API; row counts from `/size`; fields from `/info`. No rows downloaded in metadata stage.
+- **No E1–E7 experiment has been run** by this stage. MedVAL remains prohibited on Kaggle. See [Stage 1 procedures](docs/MASTER_DATA_STAGE1.md).

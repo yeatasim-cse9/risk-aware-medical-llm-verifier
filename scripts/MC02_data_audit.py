@@ -16,6 +16,6 @@ if __name__ == "__main__":
     p.add_argument("--max-candidate-pairs", type=int, default=2_000_000)
     a = p.parse_args()
     report = audit_jsonl(a.input, a.out, a.dataset, a.near_threshold, a.max_candidate_pairs)
-    print("MC02_LEAKAGE_AUDIT_" + ("PASSED" if report["passed"] else "BLOCKED"))
-    if not report["passed"]:
+    print("MC02_LEAKAGE_AUDIT_" + ("PASSED" if report["ready_for_frozen_split"] else "BLOCKED"))
+    if not report["ready_for_frozen_split"]:
         raise SystemExit(2)

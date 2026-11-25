@@ -104,7 +104,10 @@ class MasterDataTests(unittest.TestCase):
             {"id": "one", "split": "dev", "text": "Alpha beta gamma random"},
             {"id": "two", "split": "test", "text": "zebra wild animal travels"},
         ]
-        self.assertTrue(audit_rows(rows)["passed"])
+        checked = audit_rows(rows)
+        self.assertTrue(checked["passed"])
+        self.assertFalse(checked["ready_for_frozen_split"])
+        self.assertFalse(checked["grouping_gate_passed"])
 
     def test_fail_closed_candidate_limit(self):
         rows = [

@@ -7,6 +7,8 @@ on:
       - src/research_data/**
       - scripts/build_medhallu_audit.py
       - scripts/verify_medhallu_audit.py
+      - tests/test_master_data_modules.py
+      - tests/test_medhallu_kaggle_package.py
       - .github/workflows/medhallu-metadata-audit.yml
   workflow_dispatch:
     inputs:
