@@ -130,6 +130,21 @@ def encode(texts, tok, model, device, *, max_length=256):
             result.append(torch.nn.functional.normalize(pooled, p=2, dim=1))
     return torch.cat(result), truncated
 
+def exact_screen(sets, normalize):
+    """Compare unique normalized full question/context fingerprints across all sets."""
+    output = {}
+    for view in ("question", "context"):
+        groups = {s: collections.Counter(hashlib.sha256(normalize(r[view]).encode()).hexdigest()
+                  for r in sets[s]) for s in SPLITS}
+        output[view] = {}
+        for i,s in enumerate(SPLITS):
+            for t in SPLITS[i+1:]:
+                common = groups[s].keys() & groups[t].keys()
+                output[view][s+"__"+t] = {"shared_groups":len(common),
+                    "left_rows":sum(groups[s][k] for k in common),
+                    "right_rows":sum(groups[t][k] for k in common)}
+    return output
+
 def scan(sets, tok, model, device):
     # Independent question and abstract-prefix views; truncation disclosed.
     output = {}
@@ -226,6 +241,7 @@ def run():
                     held[pid] = item
         require(set(held)==ids,"OFFICIAL_HOLDOUT_TEXT_NOT_COMPLETE")
         sets["official_holdout"] = [held[p] for p in sorted(held)]
+        exact = exact_screen(sets, advanced._norm)
         del pub,index,held,med,old,assignment,ids
         stage("GPU_SEMANTIC_SCREEN")
         tok = AutoTokenizer.from_pretrained(MODEL,revision=MODEL_REV,trust_remote_code=False,
@@ -245,7 +261,7 @@ def run():
             "model":MODEL,"model_revision":MODEL_REV,"seed":SEED,"device":torch.cuda.get_device_name(0),
             "versions":{p:importlib.metadata.version(p) for p in
                         ("torch","transformers","huggingface_hub","pyarrow")},
-            "diagnostics":diagnostics,"semantic_screen":semantic,
+            "diagnostics":diagnostics,"exact_screen":exact,"semantic_screen":semantic,
             "limitations":["generic encoder not validated for clinical equivalence",
               "256-token prefix truncation; not full abstract semantic search",
               "thresholds are screening heuristics, not proof of semantic equivalence",
