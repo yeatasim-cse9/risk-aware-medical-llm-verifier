@@ -19,6 +19,10 @@
     "gpu-tiny": {
       "delivery": "historical_suppressed",
       "last_event": "gpu-tiny:complete"
+    },
+    "medhallu-metadata": {
+      "last_event": null,
+      "delivery": "none"
     }
   },
   "schema_version": 1,

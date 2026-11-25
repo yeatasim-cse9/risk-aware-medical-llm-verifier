@@ -18,7 +18,16 @@ on:
       - Pretrained Medical Model License Audit - No Downloads
       - MiniLM Pinned Model Metadata and GPU Feasibility - No Weights
       - Scheduled Synthetic Kaggle Telegram Monitor
-    types: [completed]
+      - MedHallu Metadata Audit Controller
+      - Kaggle MedHallu Read-only Failure Diagnostic
+      - E1 MedHallu Baseline Experiment
+      - E2 MedVAL Retrieval-Free Judge
+      - E3 MedVAL Evidence NLI
+      - E4 MedVAL Hybrid Verifier
+      - E5 BioASQ External Generalization
+      - E6 RAG Verification And Revision
+      - E7 Component Ablations
+    types: [in_progress, completed]
   schedule:
     - cron: '37 * * * *'
   workflow_dispatch:
@@ -100,7 +109,7 @@ jobs:
           print("UNIVERSAL_ALERTS: HISTORICAL_KAGGLE_ALERTS_SUPPRESSED")
           print("UNIVERSAL_ALERTS: NO_KAGGLE_GPU_TIME_USED")
           PY
-      - name: Notify only allowlisted completed GitHub workflow runs
+      - name: Notify allowlisted GitHub workflow start and finish
         if: github.event_name == 'workflow_run'
         env:
           GH_LEDGER_TOKEN: ${{ github.token }}
@@ -108,7 +117,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/universal_telegram_alerts.py --mode github
       - name: Decide whether any approved Kaggle job needs status polling
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'poll')
+        if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'poll')
         id: poll
         env:
           GH_LEDGER_TOKEN: ${{ github.token }}
@@ -121,7 +130,8 @@ jobs:
           from universal_telegram_alerts import read_ledger, WATCHED
           state, _ = read_ledger(os.environ["GH_LEDGER_TOKEN"])
           needed = any(
-              state["kaggle_events"][job]["last_event"] != f"{job}:complete"
+              state["kaggle_events"][job]["last_event"] is None
+              or state["kaggle_events"][job]["last_event"] == f"{job}:started"
               for job in WATCHED
           )
           print("UNIVERSAL_ALERT_KAGGLE_POLL_NEEDED: " + str(needed).upper())

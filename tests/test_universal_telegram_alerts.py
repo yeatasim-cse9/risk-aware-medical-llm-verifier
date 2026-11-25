@@ -28,6 +28,10 @@ def ledger():
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     baseline["bootstrap_sent"] = False
     baseline["github_events"] = []
+    # Older synthetic-only tests intentionally exclude pending public metadata pilot.
+    baseline["kaggle_events"]["medhallu-metadata"] = {
+        "last_event": "medhallu-metadata:complete", "delivery": "sent",
+    }
     return baseline
 
 
@@ -51,8 +55,16 @@ class UniversalAlertsTests(unittest.TestCase):
         data = validate_ledger(ledger())
         self.assertFalse(data["bootstrap_sent"])
         self.assertEqual(set(data["kaggle_events"]), set(WATCHED))
-        self.assertTrue(all(x["delivery"] == "historical_suppressed"
-                            for x in data["kaggle_events"].values()))
+        self.assertTrue(all(
+            x["delivery"] == "historical_suppressed"
+            for k, x in data["kaggle_events"].items()
+            if k != "medhallu-metadata"
+        ))
+        fresh = json.loads(BASELINE.read_text(encoding="utf-8"))
+        self.assertEqual(
+            fresh["kaggle_events"]["medhallu-metadata"],
+            {"last_event": None, "delivery": "none"}
+        )
 
     @patch("universal_telegram_alerts.read_ledger")
     @patch("universal_telegram_alerts.send_message")
@@ -75,6 +87,20 @@ class UniversalAlertsTests(unittest.TestCase):
         key, msg = github_alert_payload(run_event())
         self.assertEqual(key, "github:1234567:1:success")
         self.assertIn("GitHub workflow finished", msg)
+        self.assertIn("not Kaggle runtime completion", msg)
+
+    def test_started_event_is_not_a_finished_experiment(self):
+        payload = run_event(name="MedHallu Metadata Audit Controller")
+        payload["action"] = "in_progress"
+        payload["workflow_run"]["conclusion"] = None
+        key, message = github_alert_payload(payload)
+        self.assertEqual(key, "github:1234567:1:started")
+        self.assertIn("STARTED", message)
+        self.assertIn("NOT Kaggle execution", message)
+        self.assertNotIn("✅", message)
+
+    def test_medhallu_completed_workflow_is_not_medhallu_result(self):
+        _, msg = github_alert_payload(run_event(name="MedHallu Metadata Audit Controller"))
         self.assertIn("not Kaggle runtime completion", msg)
 
     def test_failure_and_cancel_send_bounded_safe_strings(self):
@@ -139,14 +165,20 @@ class UniversalAlertsTests(unittest.TestCase):
     @patch("universal_telegram_alerts.read_ledger")
     @patch("universal_telegram_alerts.check")
     @patch("universal_telegram_alerts.send_message")
-    def test_new_running_job_does_not_claim_success(self, send, check, read):
+    @patch("universal_telegram_alerts.write_ledger")
+    def test_new_running_job_notifies_start_but_not_success(self, write, send, check, read):
         data=ledger()
         data["kaggle_events"]["gpu-tiny"]={"last_event":None,"delivery":"none"}
         read.return_value=(data,"a"*40)
         check.return_value="running"
         self.assertEqual(poll_kaggle("GH","BOT","123456",Path("build/unused")),
-                         "kaggle_new_alerts_0")
-        send.assert_not_called()
+                         "kaggle_new_alerts_1")
+        self.assertIn("STARTED/QUEUED", send.call_args.args[2])
+        self.assertNotIn("completed", send.call_args.args[2])
+        self.assertEqual(
+            write.call_args.args[2]["kaggle_events"]["gpu-tiny"]["last_event"],
+            "gpu-tiny:started",
+        )
 
     @patch("universal_telegram_alerts.read_ledger")
     @patch("universal_telegram_alerts.check")
@@ -248,6 +280,13 @@ class UniversalAlertsTests(unittest.TestCase):
                 data[field]=value
                 with self.assertRaises(AlertError):
                     validate_ledger(data)
+
+    @patch("universal_telegram_alerts.verify_metadata")
+    def test_medhallu_metadata_completion_uses_independent_verifier(self, verify):
+        verify.return_value = {"scientific_experiments_executed": False}
+        result = check_checkpoint("medhallu_metadata", Path("safe-dir"), "a"*40)
+        self.assertIn("no E1–E7 result", result)
+        verify.assert_called_once()
 
     @patch("universal_telegram_alerts.verify_cpu")
     def test_cpu_b_distinguishes_session_completion_from_100_tasks(self, verify):

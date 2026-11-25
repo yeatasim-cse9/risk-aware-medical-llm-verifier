@@ -1,10 +1,10 @@
 # Step 10.5F — Automatic research completion/failure Telegram alerts
 
-Scope: **allowlisted GitHub Actions workflows and explicitly registered synthetic Kaggle notebooks only.** This is not a generic subscriber to arbitrary programs, datasets, private accounts or future medical experiments.
+Scope: **allowlisted GitHub Actions workflows, four historical synthetic Kaggle notebooks, and one approved public MedHallu metadata-only notebook.** Real E1–E7 are NOT running. This is not a generic subscriber to arbitrary programs, datasets, private accounts or future medical experiments.
 
 ## Two event sources
 
-1. **GitHub Actions `workflow_run` events (prompt):** a separate notification workflow reacts when one of the 10 fixed, trusted research workflows completes on this repository's `main` branch. It reads GitHub-supplied run status, ID, attempt and a strict workflow-name allowlist; it does NOT execute or download artifacts from the triggering run. It notifies privately about success/failure, timeout or cancellation. A successful GitHub **submission workflow** means the controller succeeded, NOT that a Kaggle notebook has finished.
+1. **GitHub Actions `workflow_run` events (prompt):** a separate notification workflow reacts when an allowlisted workflow starts or finishes on this repository's `main` branch. It reads GitHub-supplied run status, ID, attempt and a strict workflow-name allowlist; it does NOT execute or download artifacts from the triggering run. It notifies privately about success/failure, timeout or cancellation. A successful GitHub **submission workflow** means the controller succeeded, NOT that a Kaggle notebook has finished.
 2. **Kaggle notebook polling (best effort):** an hourly GitHub cron at UTC minute `:37` queries the private Kaggle status API ONLY for newly registered, previously unnotified synthetic jobs. Remote status `complete` is never sufficient by itself: the saved output must pass the exact checkpoint/hash/source-revision verifier before a completion message. Terminal Kaggle errors generate a sanitized failure alert. Unknown/active/queued statuses are not claimed as success.
 
 ## Registered notebook list
@@ -48,3 +48,11 @@ Existing CPU pilot's older `synthetic-kaggle-telegram-monitor.yml` remains in pl
 - Real `workflow_run` handling was exercised by `45544022815` and `45544184671`. Both correctly skipped routine GitHub CI push successes (not a test of sending an actual job-failure alert).
 - **Not yet independently observed**: the first hourly GitHub `schedule` event, an actual future workflow failure notification, and a newly registered Kaggle terminal-state message. The unit tests simulate those situations but do not replace a live failure/end-to-end alert observation.
 - Full unattended Kaggle relaunch, exact-once Telegram delivery, restricted medical dataset use, and scientific E1–E7 work remain out of scope.
+
+## Start/finish notification expansion — 2026-11-25
+
+- Allowlisted workflow start (`in_progress`) and finish (`completed`) events now have separate deduplicated Telegram messages. GH workflow start/end **are not remote Kaggle experiment start/end**.
+- The existing MedHallu public metadata-only Kaggle notebook (Version 2, exact code SHA `9fcfaad9ec13c4fd524e14ae51d85092eca6fe46`) is newly registered. Scheduled read-only polling and the first monitor push will send a status notification if running/queued, verified complete, or failed. If the first poll occurs after terminal status, an earlier start cannot be inferred.
+- The metadata manifest must pass independent verifier `verify_medhallu_audit.py` before a Kaggle success message is allowed. No raw text, full logs or restricted data ever go to Telegram.
+- Future E1–E7 workflow names are reserved in allowlists, but **no scientific experiment workflows are active yet**. Every later Kaggle experimental notebook must be approved and registered with source revision and independent checkpoint verification before remote completion notifications can be claimed.
+- At-least-once delivery: failures in Telegram or ledger persistence may delay alerts or cause duplicates; hourly GitHub cron is not an exact real-time guarantee. Never equate GitHub controller success with verified Kaggle completion.

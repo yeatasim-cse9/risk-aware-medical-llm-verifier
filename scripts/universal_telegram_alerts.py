@@ -27,6 +27,7 @@ from telegram_notification_test import NotificationError, send_message
 from verify_checkpoint import verify as verify_cpu
 from verify_gpu_smoke import verify as verify_cuda
 from verify_tiny_gpu_inference import verify as verify_tiny
+from verify_medhallu_audit import verify as verify_metadata
 
 REPO = "yeatasim-cse9/risk-aware-medical-llm-verifier"
 LEDGER_PATH = "monitoring/universal-telegram-alert-ledger.json"
@@ -61,6 +62,12 @@ WATCHED = {
         "kind": "tiny_inference", "commit": TINY_SHA,
         "label": "Untrained GPU Transformer pilot",
     },
+    "medhallu-metadata": {
+        "kernel": "yeatasimbillah/medical-llm-medhallu-metadata-audit",
+        "kind": "medhallu_metadata",
+        "commit": "9fcfaad9ec13c4fd524e14ae51d85092eca6fe46",
+        "label": "MedHallu public metadata audit (not E1–E7)",
+    },
 }
 
 WORKFLOWS = {
@@ -75,6 +82,15 @@ WORKFLOWS = {
     "Pretrained Medical Model License Audit - No Downloads",
     "MiniLM Pinned Model Metadata and GPU Feasibility - No Weights",
     "Scheduled Synthetic Kaggle Telegram Monitor",
+    "MedHallu Metadata Audit Controller",
+    "Kaggle MedHallu Read-only Failure Diagnostic",
+    "E1 MedHallu Baseline Experiment",
+    "E2 MedVAL Retrieval-Free Judge",
+    "E3 MedVAL Evidence NLI",
+    "E4 MedVAL Hybrid Verifier",
+    "E5 BioASQ External Generalization",
+    "E6 RAG Verification And Revision",
+    "E7 Component Ablations",
 }
 GH_TERMINAL = {"success", "failure", "cancelled", "timed_out"}
 GH_EVENTS = {"push", "workflow_dispatch", "schedule"}
@@ -105,6 +121,7 @@ def validate_ledger(data: object) -> dict:
             f"{job}:complete",
             f"{job}:failed",
             f"{job}:verification_failed",
+            f"{job}:started",
         }:
             raise AlertError("INVALID_ALERT_LEDGER_EVENT_KEY")
         if entry["delivery"] not in {
@@ -122,7 +139,7 @@ def validate_ledger(data: object) -> dict:
         raise AlertError("DUPLICATE_GITHUB_HISTORY_KEYS")
     if any(
         not isinstance(v, str)
-        or re.fullmatch(r"github:[1-9][0-9]{0,19}:[1-9][0-9]{0,5}:(success|failure|cancelled|timed_out)", v) is None
+        or re.fullmatch(r"github:[1-9][0-9]{0,19}:[1-9][0-9]{0,5}:(started|success|failure|cancelled|timed_out)", v) is None
         for v in history
     ):
         raise AlertError("INVALID_GITHUB_ALERT_KEY")
@@ -214,7 +231,7 @@ def bootstrap(github_token: str, bot_token: str, chat_id: str) -> str:
 
 def github_alert_payload(event: object) -> tuple[str, str] | None:
     """Only GitHub-signed workflow_run event data, never untrusted job logs."""
-    if not isinstance(event, dict) or event.get("action") != "completed":
+    if not isinstance(event, dict) or event.get("action") not in {"in_progress", "completed"}:
         return None
     run = event.get("workflow_run")
     if not isinstance(run, dict):
@@ -231,8 +248,9 @@ def github_alert_payload(event: object) -> tuple[str, str] | None:
         if commit["message"].startswith("chore(alerts):"):
             return None
 
-    conclusion = run.get("conclusion")
-    if conclusion not in GH_TERMINAL:
+    action = event["action"]
+    conclusion = run.get("conclusion") if action == "completed" else "started"
+    if conclusion not in GH_TERMINAL | {"started"}:
         return None
     number, attempt = run.get("id"), run.get("run_attempt")
     if (type(number) is not int or not 1 <= number <= 10**20 - 1
@@ -242,14 +260,22 @@ def github_alert_payload(event: object) -> tuple[str, str] | None:
     name = run["name"]
     # Continuous CI successes from every push would create noise and can
     # feed back through ledger-write commits; CI failures still get alerts.
-    if conclusion == "success" and (
-        (name == "Research Repository CI" and run["event"] == "push")
+    if (
+        (name == "Research Repository CI" and run["event"] == "push"
+         and conclusion in {"started", "success"})
         or (name == "Scheduled Synthetic Kaggle Telegram Monitor"
-            and run["event"] == "schedule")
+            and run["event"] == "schedule"
+            and conclusion in {"started", "success"})
     ):
         return None
 
-    if conclusion == "success":
+    if conclusion == "started":
+        message = (
+            f"▶️ GitHub workflow STARTED: {name}\n"
+            f"Run #{number} (attempt {attempt}).\n"
+            "Controller or CI start only; this is NOT Kaggle execution or a scientific result."
+        )
+    elif conclusion == "success":
         message = (
             f"✅ GitHub workflow finished: {name}\n"
             f"Run #{number} (attempt {attempt}).\n"
@@ -298,6 +324,11 @@ def check_checkpoint(kind: str, folder: Path, commit: str) -> str:
         if state["device"] != "cuda:0":
             raise AlertError("GPU_SMOKE_DEVICE_MISMATCH")
         return "Saved CUDA smoke checkpoint verified."
+    if kind == "medhallu_metadata":
+        verified = verify_metadata(folder, expected_commit=commit)
+        if verified.get("scientific_experiments_executed") is not False:
+            raise AlertError("METADATA_MISLABELED_AS_EXPERIMENT")
+        return "MedHallu public metadata manifest independently verified; no E1–E7 result."
     if kind == "tiny_inference":
         state = verify_tiny(folder, expected_commit=commit)
         if state["device"] != "cuda:0" or state["model_pretrained"] is not False:
@@ -322,7 +353,23 @@ def poll_kaggle(github_token: str, bot_token: str, chat_id: str,
         info = WATCHED[job]
         # A failed/unknown status or output never changes a completion claim.
         state = check(info["kernel"], "any")
-        if state in ACTIVE | {"missing"}:
+        if state == "missing":
+            continue
+        if state in ACTIVE:
+            key = f"{job}:started"
+            fresh, sha = read_ledger(github_token)
+            prior = fresh["kaggle_events"][job]["last_event"]
+            if prior is not None:
+                continue
+            message = (
+                f"▶️ Kaggle notebook STARTED/QUEUED (observed): {info['label']}\n"
+                "Actual work may still be queued; no E1–E7 result claimed."
+            )
+            send_message(bot_token, chat_id, message)
+            updated = copy.deepcopy(fresh)
+            updated["kaggle_events"][job] = {"last_event": key, "delivery": "sent"}
+            write_ledger(github_token, sha, updated)
+            count += 1
             continue
         if state not in TERMINAL:
             raise AlertError("KAGGLE_REMOTE_STATE_UNRECOGNIZED")
@@ -350,9 +397,9 @@ def poll_kaggle(github_token: str, bot_token: str, chat_id: str,
         if fresh["kaggle_events"][job]["last_event"] == key:
             continue
         if state == "complete":
-            message = f"✅ Kaggle job completed: {info['label']}\n{summary}\nSynthetic infrastructure only."
+            message = f"✅ Kaggle job completed: {info['label']}\n{summary}\nNo clinical experiment results implied."
         else:
-            message = f"⚠️ Kaggle job requires attention: {info['label']}\n{summary}\nCheck Kaggle privately."
+            message = f"⚠️ Kaggle job requires attention: {info['label']}\n{summary}\nCheck Kaggle privately; no results claimed."
         send_message(bot_token, chat_id, message)
         updated = copy.deepcopy(fresh)
         updated["kaggle_events"][job] = {
