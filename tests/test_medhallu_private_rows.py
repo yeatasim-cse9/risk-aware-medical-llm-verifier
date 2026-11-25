@@ -77,7 +77,7 @@ class PrivateMedhalluNativeAuditTests(unittest.TestCase):
             compile(runner, "kaggle-runner", "exec")
             self.assertIn(DATA_REV, runner)
             self.assertIn(COMMIT, runner)
-            self.assertIn("TemporaryDirectory(dir=\"/kaggle/temp\"", runner)
+            self.assertIn("TemporaryDirectory(dir=str(temp_root)", runner)
             self.assertIn("dataset_rows_exported", runner)
             self.assertNotIn("MedVAL-Bench", runner)
             with self.assertRaises(ValueError):
@@ -122,9 +122,39 @@ class PrivateMedhalluNativeAuditTests(unittest.TestCase):
         self.assertIn('allow_patterns=["pqa_labeled/*.parquet", "pqa_artificial/*.parquet"]', RUNNER_SUFFIX)
         self.assertIn('"huggingface_hub==0.36.0"', RUNNER_SUFFIX)
         self.assertIn('"pyarrow==21.0.0"', RUNNER_SUFFIX)
-        self.assertIn('raise NativeAuditError("KAGGLE_PRIVATE_ENVIRONMENT_REQUIRED")', RUNNER_SUFFIX)
+        self.assertIn('raise NativeAuditError("KAGGLE_WORKING_DIRECTORY_UNAVAILABLE")', RUNNER_SUFFIX)
         self.assertIn('stderr=subprocess.DEVNULL', RUNNER_SUFFIX)
         self.assertNotIn("kaggle kernels push", RUNNER_SUFFIX)
+
+
+    def test_safe_diagnostics_and_temporary_scratch_creation(self):
+        for stage in (
+            "PRIVATE_ENVIRONMENT_CHECK", "PRIVATE_ENVIRONMENT_OK",
+            "DEPENDENCIES", "HUB_SNAPSHOT", "FILE_LAYOUT_AND_SCHEMA",
+            "NATIVE_ROW_AUDIT", "AGGREGATE_INTEGRITY", "AGGREGATE_SAVE",
+        ):
+            self.assertIn(stage, RUNNER_SUFFIX)
+        self.assertIn("MEDHALLU_NATIVE_AUDIT_FAILED_STAGE=", RUNNER_SUFFIX)
+        self.assertIn("MEDHALLU_NATIVE_AUDIT_FAILED_CODE=", RUNNER_SUFFIX)
+        self.assertIn("except Exception as exc:", RUNNER_SUFFIX)
+        self.assertIn("candidate == candidate.upper()", RUNNER_SUFFIX)
+        self.assertNotIn("print(exc)", RUNNER_SUFFIX)
+        self.assertNotIn("print(str(exc))", RUNNER_SUFFIX)
+        self.assertNotIn("traceback.print_exc", RUNNER_SUFFIX)
+        self.assertIn("temp_root.mkdir(parents=True, exist_ok=True, mode=0o700)", RUNNER_SUFFIX)
+        self.assertIn("temp_root.is_symlink()", RUNNER_SUFFIX)
+        self.assertIn("KAGGLE_WORKING_DIRECTORY_UNAVAILABLE", RUNNER_SUFFIX)
+
+    def test_failed_only_retry_requires_new_rights_and_cpu_approval(self):
+        workflow = (ROOT / ".github/workflows/medhallu-private-native-row-audit.yml").read_text()
+        self.assertIn("options: [prepare, preflight, submit, retry_failed, status, verify]", workflow)
+        self.assertIn('if operation == "retry_failed" and state != "error":', workflow)
+        self.assertIn("PRIVATE_NATIVE_RETRY_ONLY_FOR_CONFIRMED_ERROR", workflow)
+        self.assertIn('DATA_RIGHTS_APPROVED: ${{ inputs.confirm_private_dataset_rights }}', workflow)
+        self.assertIn('CPU_APPROVED: ${{ inputs.confirm_cpu_quota }}', workflow)
+        self.assertIn('if [[ "$DATA_RIGHTS_APPROVED" != "true" || "$CPU_APPROVED" != "true" ]]', workflow)
+        self.assertIn("kaggle kernels push -p build/medhallu-native-private", workflow)
+
 
 
 if __name__ == "__main__":
