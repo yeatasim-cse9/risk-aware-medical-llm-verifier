@@ -90,6 +90,7 @@ WORKFLOWS = {
     "MiniLM Pinned Model Metadata and GPU Feasibility - No Weights",
     "Scheduled Synthetic Kaggle Telegram Monitor",
     "MedHallu Metadata Audit Controller",
+    "MedHallu Private Native Row Audit Controller",
     "Kaggle MedHallu Read-only Failure Diagnostic",
     "E1 MedHallu Baseline Experiment",
     "E2 MedVAL Retrieval-Free Judge",
