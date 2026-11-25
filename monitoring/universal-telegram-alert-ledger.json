@@ -21,8 +21,8 @@
       "last_event": "gpu-tiny:complete"
     },
     "medhallu-metadata": {
-      "last_event": null,
-      "delivery": "none"
+      "delivery": "sent",
+      "last_event": "medhallu-metadata:complete"
     }
   },
   "schema_version": 1,
