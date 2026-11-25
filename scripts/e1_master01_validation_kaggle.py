@@ -6,6 +6,7 @@ import collections
 import hashlib
 import importlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -73,7 +74,7 @@ def download_module(path):
     return b
 
 def grouped_diagnostics(med, assignment):
-    # Category labels are benchmark metadata; no medical content or row IDs returned.
+    # No names, medical content or row IDs returned.
     groups = {}
     for config in sorted(med):
         groups[config] = {}
@@ -83,8 +84,8 @@ def grouped_diagnostics(med, assignment):
             difficulties = collections.Counter(r["Difficulty Level"] for r in rows)
             groups[config][split] = {
                 "parents": len(rows), "benchmark_role_0": len(rows), "benchmark_role_1": len(rows),
-                "category_counts": dict(sorted(categories.items())),
-                "difficulty_counts": dict(sorted(difficulties.items())),
+                "category_frequency_sorted": sorted(categories.values(), reverse=True),
+                "difficulty_frequency_sorted": sorted(difficulties.values(), reverse=True),
                 "min_observed_category_count": min(categories.values(), default=0),
             }
     return groups
@@ -149,6 +150,8 @@ def scan(sets, tok, model, device):
 def run():
     require(os.environ.get("MASTER01_PRIVATE_RIGHTS_CONFIRMED") == "YES",
             "PRIVATE_DATA_RIGHTS_CONFIRMATION_REQUIRED")
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
     import torch
     from transformers import AutoTokenizer, AutoModel
     require(torch.cuda.is_available(), "KAGGLE_GPU_REQUIRED")
@@ -268,4 +271,5 @@ if __name__ == "__main__":
     except Exception:
         notify("FAILED_"+STAGE)
         print("MASTER01_FAILED_STAGE="+STAGE,flush=True)
+        print("MASTER01_FAILED_CODE=SAFE_FAILURE_REQUIRES_REVIEW",flush=True)
         raise SystemExit(1)
