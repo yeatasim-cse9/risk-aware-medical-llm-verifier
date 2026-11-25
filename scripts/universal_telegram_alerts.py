@@ -91,6 +91,7 @@ WORKFLOWS = {
     "Scheduled Synthetic Kaggle Telegram Monitor",
     "MedHallu Metadata Audit Controller",
     "MedHallu Private Native Row Audit Controller",
+    "MedHallu E1 Candidate Private Split Audit Controller",
     "Kaggle MedHallu Read-only Failure Diagnostic",
     "E1 MedHallu Baseline Experiment",
     "E2 MedVAL Retrieval-Free Judge",
