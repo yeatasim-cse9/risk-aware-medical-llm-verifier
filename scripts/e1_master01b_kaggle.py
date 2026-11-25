@@ -28,7 +28,7 @@ OVERLAP = 64
 MAX_WINDOWS_PER_PARENT = 64
 WINDOW_BLOCK = 512
 REVIEW_PER_STRATUM = 100
-REPORT = "master01b_full_context_v1.json"
+REPORT = "master01b_full_context_v2.json"
 STAGE = "BOOT"
 
 def require(ok, code):
@@ -51,9 +51,35 @@ def window_ranges(n, payload, overlap):
             all(a[1]>=b[0] for a,b in zip(spans,spans[1:])), "WINDOW_COVERAGE_FAILURE")
     return spans
 
-def encode_windows(texts, tok, model, device):
+def bert_special_ids(tok):
+    """Both pinned encoders are BERT single-sequence models.
+    Validate the explicit framing against the public tokenizer call on synthetic text.
+    Do not depend on legacy build_inputs_with_special_tokens or pad methods.
+    """
+    cls,sep,pad=tok.cls_token_id,tok.sep_token_id,tok.pad_token_id
+    require(all(type(i) is int and i>=0 for i in (cls,sep,pad)) and len({cls,sep,pad})==3,
+            "BERT_SPECIAL_ID_POLICY")
+    for text in ("synthetic alpha beta", "A second invented test."):
+        raw=tok(text,add_special_tokens=False,truncation=False)["input_ids"]
+        framed=tok(text,add_special_tokens=True,truncation=False)["input_ids"]
+        require(framed==[cls,*raw,sep],"BERT_FRAMING_MISMATCH")
+    return cls,sep,pad
+
+def padded_batch(rows,pad,device):
     import torch
-    payload=MAX_LENGTH-tok.num_special_tokens_to_add(pair=False)
+    require(bool(rows) and all(0<len(r)<=MAX_LENGTH for r in rows),"BATCH_WINDOW_POLICY")
+    width=max(map(len,rows))
+    ids=[r+[pad]*(width-len(r)) for r in rows]
+    masks=[[1]*len(r)+[0]*(width-len(r)) for r in rows]
+    return {"input_ids":torch.tensor(ids,dtype=torch.long,device=device),
+            "attention_mask":torch.tensor(masks,dtype=torch.long,device=device)}
+
+def encode_windows(texts, tok, model, device, *, label="SYNTHETIC"):
+
+    import torch
+    stage(label+"_TOKENIZE")
+    cls,sep,pad=bert_special_ids(tok)
+    payload=MAX_LENGTH-2
     require(payload>OVERLAP,"TOKENIZER_SPECIAL_TOKEN_POLICY")
     pieces=[]
     counts=[]
@@ -61,23 +87,23 @@ def encode_windows(texts, tok, model, device):
     covered=0
     for offset in range(0,len(texts),64):
         batch=tok(texts[offset:offset+64],add_special_tokens=False,
-                  truncation=False,verbose=False)["input_ids"]
+                  truncation=False)["input_ids"]
         for ids in batch:
             spans=window_ranges(len(ids),payload,OVERLAP)
             total+=len(ids)
             covered+=spans[0][1]+sum(max(0,b[1]-a[1]) for a,b in zip(spans,spans[1:]))
             counts.append(len(spans))
             for a,b in spans:
-                row=tok.build_inputs_with_special_tokens(ids[a:b])
+                row=[cls,*ids[a:b],sep]
                 require(len(row)<=MAX_LENGTH,"WINDOW_OVERFLOW")
                 pieces.append(row)
     require(len(counts)==len(texts) and total==covered and len(pieces)<=len(texts)*MAX_WINDOWS_PER_PARENT,
             "INCOMPLETE_WINDOW_COVERAGE")
+    stage(label+"_FORWARD")
     vectors=[]
     with torch.inference_mode():
         for i in range(0,len(pieces),32):
-            batch=tok.pad({"input_ids":pieces[i:i+32]},padding=True,return_attention_mask=True,
-                          return_tensors="pt").to(device)
+            batch=padded_batch(pieces[i:i+32],pad,device)
             hidden=model(**batch).last_hidden_state.float()
             mask=batch["attention_mask"].unsqueeze(-1)
             pooled=(hidden*mask).sum(1)/mask.sum(1).clamp(min=1)
@@ -166,6 +192,7 @@ def file_hash(path):
     return h.hexdigest()
 
 def model_load(key,root,device):
+    stage("MODEL_"+key.upper()+"_DOWNLOAD")
     from huggingface_hub import snapshot_download
     from transformers import AutoTokenizer,AutoModel
     model_id,revision,weight=MODELS[key]
@@ -174,10 +201,13 @@ def model_load(key,root,device):
          cache_dir=str(root/"models"),allow_patterns=["config.json","tokenizer.json","tokenizer_config.json",
           "special_tokens_map.json","added_tokens.json","vocab.txt","model.safetensors"]))
     require(path.name==revision and file_hash(path/"model.safetensors")==weight,"MODEL_WEIGHT_PIN_MISMATCH")
+    stage("MODEL_"+key.upper()+"_TOKENIZER")
     tok=AutoTokenizer.from_pretrained(str(path),local_files_only=True,trust_remote_code=False)
+    stage("MODEL_"+key.upper()+"_WEIGHTS")
     model=AutoModel.from_pretrained(str(path),local_files_only=True,trust_remote_code=False,
                                    use_safetensors=True).to(device).eval()
-    require(model.config.max_position_embeddings>=MAX_LENGTH,"MODEL_CONTEXT_LIMIT")
+    require(model.config.model_type=="bert" and model.config.max_position_embeddings>=MAX_LENGTH,"MODEL_CONTEXT_LIMIT")
+    stage("MODEL_"+key.upper()+"_FILE_HASHES")
     files={p.name:file_hash(p) for p in path.iterdir() if p.is_file()}
     return tok,model,files
 
@@ -254,6 +284,18 @@ def run():
     with tempfile.TemporaryDirectory(dir=scratch,prefix="master01b-") as tmp:
         root=Path(tmp)
         os.environ["HF_HOME"]=str(root/"hf")
+        # Test both exact pinned encoders with only invented strings before reading medical data.
+        for key in MODELS:
+            tok,model,_=model_load(key,root,device)
+            groups,cov=encode_windows(["synthetic alpha beta", "invented example "*400],
+                                     tok,model,device,label="SMOKE_"+key.upper())
+            require(cov["total_tokens"]==cov["covered_tokens"] and cov["multiwindow_parents"]==1,
+                    "MODEL_SMOKE_COVERAGE")
+            test=compare_windows(groups[:1],groups[1:],np.zeros((1,1),dtype=bool))
+            require(test["parent_pairs"]==1,"MODEL_SMOKE_PAIR")
+            del groups,tok,model
+            torch.cuda.empty_cache()
+        print("MASTER01B_BOTH_ENCODER_GPU_SMOKE_PASSED",flush=True)
         stage("PINNED_SOURCE_RECONSTRUCTION")
         sets,norm,diagnostics,exact=reconstruct(root)
         union={a+"__"+b:np.zeros((SIZES[a],SIZES[b]),dtype=bool) for a,b in PAIRS}
@@ -267,10 +309,12 @@ def run():
                 groups={}
                 coverage={}
                 for s in base.SPLITS:
-                    groups[s],coverage[s]=encode_windows([r[view] for r in sets[s]],tok,model,device)
+                    groups[s],coverage[s]=encode_windows([r[view] for r in sets[s]],tok,model,device,
+                        label=key.upper()+"_"+view.upper()+"_"+s.upper())
                 comparisons={}
                 for a,b in PAIRS:
                     name=a+"__"+b
+                    stage(key.upper()+"_"+view.upper()+"_COMPARE_"+name.upper())
                     comparisons[name]=compare_windows(groups[a],groups[b],union[name])
                 result["views"][view]={"coverage":coverage,"comparisons":comparisons}
                 del groups

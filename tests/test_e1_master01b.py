@@ -139,7 +139,7 @@ class TestMaster01B(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 c.build(p)
 
-    @patch.object(c,"check",return_value="running")
+    @patch.object(c,"check",side_effect=["error","running"])
     @patch.object(c.subprocess,"run")
     def test_duplicate_refused(self,run,check):
         run.return_value.returncode=0
@@ -153,3 +153,55 @@ class TestMaster01B(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"REMOTE_TERMINAL_FAILURE"):
             c.monitor(Path("unused"))
         telegram.assert_called_once()
+
+    @patch.object(c,"check",return_value="running")
+    @patch.object(c.subprocess,"run")
+    def test_previous_run_must_be_terminal_error(self,run,check):
+        run.return_value.returncode=0
+        with self.assertRaisesRegex(ValueError,"PREVIOUS_V1_NOT_CONFIRMED_ERROR"):
+            c.preflight()
+        check.assert_called_once_with(c.PREVIOUS_KERNEL,"any")
+
+    @patch.object(c,"check",side_effect=["error","missing"])
+    @patch.object(c.subprocess,"run")
+    def test_retry_new_slot_only_after_v1_error(self,run,check):
+        run.return_value.returncode=0
+        c.preflight()
+        self.assertEqual([x.args[0] for x in check.call_args_list],[c.PREVIOUS_KERNEL,c.KERNEL])
+
+    def test_modern_tokenizer_and_real_tiny_bert_forward(self):
+        try:
+            import torch
+            from tokenizers import Tokenizer
+            from tokenizers.models import WordPiece
+            from tokenizers.pre_tokenizers import Whitespace
+            from tokenizers.processors import BertProcessing
+            from transformers import AutoTokenizer,BertConfig,BertModel
+        except ImportError:
+            self.skipTest("transformers and CPU torch required in dedicated compatibility CI")
+        vocab={word:i for i,word in enumerate(["[PAD]","[UNK]","[CLS]","[SEP]","[MASK]",
+              "synthetic","alpha","beta","invented","example","A","second","test","."])}
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            t=Tokenizer(WordPiece(vocab=vocab,unk_token="[UNK]"))
+            t.pre_tokenizer=Whitespace()
+            t.post_processor=BertProcessing(("[SEP]",3),("[CLS]",2))
+            t.save(str(path/"tokenizer.json"))
+            (path/"config.json").write_text(json.dumps({"model_type":"bert"}))
+            (path/"tokenizer_config.json").write_text(json.dumps({
+                "tokenizer_class":"BertTokenizer","unk_token":"[UNK]","sep_token":"[SEP]",
+                "pad_token":"[PAD]","cls_token":"[CLS]","mask_token":"[MASK]",
+                "model_max_length":512,"do_lower_case":False}))
+            tok=AutoTokenizer.from_pretrained(str(path),local_files_only=True,trust_remote_code=False)
+            model=BertModel(BertConfig(vocab_size=len(vocab),hidden_size=16,num_hidden_layers=1,
+                     num_attention_heads=2,intermediate_size=32,max_position_embeddings=512)).eval()
+            self.assertEqual(m.bert_special_ids(tok),(2,3,0))
+            rows=m.padded_batch([[2,5,3],[2,6,7,3]],0,"cpu")
+            self.assertEqual(rows["attention_mask"].tolist(),[[1,1,1,0],[1,1,1,1]])
+            groups,coverage=m.encode_windows(["synthetic alpha beta","invented example "*400],
+                                               tok,model,"cpu")
+            self.assertEqual(coverage["total_tokens"],coverage["covered_tokens"])
+            self.assertEqual(coverage["multiwindow_parents"],1)
+            self.assertEqual(len(groups[0]),1)
+            self.assertTrue(bool(torch.isfinite(groups[1]).all()))
+            self.assertTrue(torch.allclose(groups[1].norm(dim=1),torch.ones(len(groups[1])),atol=1e-5))
