@@ -299,14 +299,24 @@ def handle_github_event(github_token: str, bot_token: str, chat_id: str,
     if item is None:
         return "unregistered_or_nonactionable_workflow_skipped"
     key, message = item
-    ledger, sha = read_ledger(github_token)
+    ledger, _ = read_ledger(github_token)
     if key in ledger["github_events"]:
         return "github_run_duplicate_skipped"
+    # Send once; only ledger persistence is retried on competing events.
     send_message(bot_token, chat_id, message)
-    updated = copy.deepcopy(ledger)
-    updated["github_events"] = (updated["github_events"] + [key])[-MAX_HISTORY:]
-    write_ledger(github_token, sha, updated)
-    return "github_event_sent"
+    for attempt in range(8):
+        fresh, sha = read_ledger(github_token)
+        if key in fresh["github_events"]:
+            return "github_event_already_recorded_after_delivery"
+        updated = copy.deepcopy(fresh)
+        updated["github_events"] = (updated["github_events"] + [key])[-MAX_HISTORY:]
+        try:
+            write_ledger(github_token, sha, updated)
+            return "github_event_sent"
+        except AlertError as exc:
+            if str(exc) != "LEDGER_WRITE_CONFLICT_OR_REJECTION" or attempt == 7:
+                raise
+    raise AlertError("GITHUB_LEDGER_RETRIES_EXHAUSTED")
 
 
 def check_checkpoint(kind: str, folder: Path, commit: str) -> str:

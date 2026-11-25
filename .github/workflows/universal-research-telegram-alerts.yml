@@ -43,7 +43,10 @@ permissions:
   contents: write
 
 concurrency:
-  group: universal-synthetic-research-telegram-alerts
+  # Do not discard rapid start/end events or CI events through one pending-slot group.
+  # Distinct workflow_run id/action pairs may execute concurrently; the ledger
+  # must use optimistic compare-and-swap retry on conflicts.
+  group: universal-telegram-${{ github.event_name == 'workflow_run' && format('{0}-{1}', github.event.workflow_run.id, github.event.action) || github.event_name }}
   cancel-in-progress: false
 
 jobs:

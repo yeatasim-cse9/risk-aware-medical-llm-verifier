@@ -150,6 +150,17 @@ class UniversalAlertsTests(unittest.TestCase):
         send.assert_called_once()
         self.assertEqual(original["github_events"], [])
 
+    @patch("universal_telegram_alerts.read_ledger")
+    @patch("universal_telegram_alerts.send_message")
+    @patch("universal_telegram_alerts.write_ledger")
+    def test_concurrent_ledger_conflict_retries_without_duplicate_send(self, write, send, read):
+        read.return_value=(ledger(), "a"*40)
+        write.side_effect=[AlertError("LEDGER_WRITE_CONFLICT_OR_REJECTION"), None]
+        result = handle_github_event("GH", "BOT", "123456", run_event(name="MedHallu Metadata Audit Controller"))
+        self.assertEqual(result, "github_event_sent")
+        self.assertEqual(write.call_count, 2)
+        send.assert_called_once()
+
     def test_rerun_attempt_changes_dedup_key(self):
         key1, _ = github_alert_payload(run_event(conclusion="failure", attempt=1))
         key2, _ = github_alert_payload(run_event(conclusion="success", attempt=2))
