@@ -1,0 +1,187 @@
+name: MedHallu E1 Candidate Private Split Audit Controller
+
+# Never launch private Kaggle on push or PR. Manual submission requires two
+# fresh approvals. Only sanitized candidate aggregate is downloadable.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/e1-candidate-private-kaggle.yml
+      - scripts/e1_candidate_private_kaggle.py
+      - tests/test_e1_candidate_private_kaggle.py
+      - src/research_data/e1_candidate_splits.py
+      - src/research_data/medhallu_native_audit.py
+      - configs/medhallu-e1-prior-aggregate-evidence.json
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [prepare, preflight, submit, status, verify]
+        default: prepare
+        required: true
+        description: "Prepare code, read-only preflight, one authorized private CPU submit, status, or verify"
+      confirm_dataset_rights:
+        type: boolean
+        default: false
+        description: "Submit only: MedHallu/PubMedQA terms and inherited abstract copyright reviewed; private Kaggle analysis approved"
+      confirm_one_cpu_run:
+        type: boolean
+        default: false
+        description: "Submit only: approve ONE new Kaggle CPU run, not GPU or E1 training"
+      source_commit:
+        type: string
+        required: false
+        description: "Verify only: exact 40-character SHA printed by the submit run"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medhallu-e1-candidate-private-v1
+  cancel-in-progress: false
+
+jobs:
+  candidate-pilot:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out only trusted main code, NEVER user-entered source SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Offline E1 candidate and private verifier tests, synthetic only
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_e1_candidate_splits.py -v
+          python -m unittest discover -s tests -p test_e1_candidate_private_kaggle.py -v
+          python -m unittest discover -s tests -p test_e1_readiness.py -v
+          python scripts/e1_readiness.py
+      - name: Prepare code-only private CPU notebook and validate its metadata
+        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit'
+        run: |
+          set -euo pipefail
+          python scripts/e1_candidate_private_kaggle.py build build/e1-candidate-private --source-commit "$(git rev-parse HEAD)"
+          python -m py_compile build/e1-candidate-private/runner.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("build/e1-candidate-private")
+          m=json.loads((root/"kernel-metadata.json").read_text())
+          assert m["id"]=="yeatasimbillah/medical-llm-e1-candidate-split-v1"
+          assert m["is_private"] is True
+          assert m["enable_gpu"] is False and m["enable_tpu"] is False
+          assert m["enable_internet"] is True
+          assert all(m[x]==[] for x in ("dataset_sources","competition_sources","kernel_sources","model_sources"))
+          assert {x.name for x in root.iterdir()}=={"runner.py","kernel-metadata.json","__pycache__"} or {x.name for x in root.iterdir()}=={"runner.py","kernel-metadata.json"}
+          print("E1_PRIVATE_CPU_METADATA_APPROVED_CODE_ONLY_NO_SUBMISSION")
+          PY
+      - name: Upload source-only package, never dataset rows
+        if: github.event_name == 'push' || inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-candidate-source-only-${{ github.run_id }}
+          path: |
+            build/e1-candidate-private/runner.py
+            build/e1-candidate-private/kernel-metadata.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Require valid exact source commit for read-only independent verification
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Verify requires exact 40-character submit Git SHA"
+            exit 1
+          fi
+          if ! git cat-file -e "${EXPECTED_SOURCE_SHA}^{commit}" 2>/dev/null ||
+             ! git merge-base --is-ancestor "$EXPECTED_SOURCE_SHA" HEAD; then
+            echo "::error::Submitted source SHA is not in trusted main history"
+            exit 1
+          fi
+      - name: Install Kaggle CLI only for read-only checks or approved submit
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status' || inputs.operation == 'verify')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::KAGGLE_API_TOKEN missing"
+            exit 1
+          fi
+          python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Read Kaggle notebook state and refuse existing slug
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from scripts.kaggle_status import check
+          state=check("yeatasimbillah/medical-llm-e1-candidate-split-v1","any")
+          if os.environ["OPERATION"] == "submit" and state != "missing":
+              raise SystemExit("E1_CANDIDATE_EXISTING_NOTEBOOK_REUSE_BLOCKED")
+          print("E1_CANDIDATE_KAGGLE_STATE="+state)
+          PY
+      - name: Require a fresh dataset-rights and one-run CPU authorization
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          RIGHTS: ${{ inputs.confirm_dataset_rights }}
+          CPU: ${{ inputs.confirm_one_cpu_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$RIGHTS" != "true" || "$CPU" != "true" ]]; then
+            echo "::error::Both dataset-rights and one-run CPU approval required"
+            exit 1
+          fi
+          echo "E1_CANDIDATE_PRIVATE_DATA_RIGHTS_AND_CPU_APPROVAL_CONFIRMED"
+      - name: Verify quota endpoint availability before any push
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          kaggle quota >/dev/null 2>&1 || { echo "::error::Kaggle quota preflight failed"; exit 1; }
+          echo "E1_CANDIDATE_KAGGLE_QUOTA_API_ACCESSIBLE_NOT_EXACT_CPU_QUOTA"
+      - name: Submit exactly one private CPU candidate-design job, not E1 model training
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "E1_CANDIDATE_SUBMITTED_SOURCE_SHA=$(git rev-parse HEAD)"
+          kaggle kernels push -p build/e1-candidate-private
+          echo "E1_CANDIDATE_KAGGLE_SUBMISSION_ACCEPTED_NOT_RUNTIME_COMPLETE"
+      - name: Verify only completed Kaggle output, never read original dataset
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-e1-candidate-split-v1 --require complete
+          mkdir -p build/e1-candidate-verified
+          kaggle kernels output yeatasimbillah/medical-llm-e1-candidate-split-v1 -p build/e1-candidate-verified
+          python scripts/e1_candidate_private_kaggle.py verify build/e1-candidate-verified --source-commit "$EXPECTED_SOURCE_SHA"
+          echo "E1_CANDIDATE_REAL_ROW_AGGREGATE_VERIFIED_NO_MODEL_EVALUATION"
+      - name: Retain only independently verified sanitized aggregate JSON
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-candidate-aggregate-only-${{ github.run_id }}
+          path: build/e1-candidate-verified/e1_candidate_split_aggregate.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Confirm E1 scientific run remains blocked
+        if: always()
+        run: |
+          echo "E1_CANDIDATE_ONLY_NO_SCIENTIFIC_TRAINING_NO_RESTRICTED_MEDVAL"
