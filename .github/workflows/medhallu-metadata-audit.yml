@@ -1,4 +1,5 @@
 name: MedHallu Metadata Audit Controller
+# Research-code preparation only on push; Telegram reports workflow start/finish, not E1–E7 results.
 
 on:
   push:
