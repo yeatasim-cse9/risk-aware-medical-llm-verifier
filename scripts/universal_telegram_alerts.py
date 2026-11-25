@@ -28,6 +28,7 @@ from verify_checkpoint import verify as verify_cpu
 from verify_gpu_smoke import verify as verify_cuda
 from verify_tiny_gpu_inference import verify as verify_tiny
 from verify_medhallu_audit import verify as verify_metadata
+from cpu_telegram_e2e import verify as verify_cpu_e2e
 
 REPO = "yeatasim-cse9/risk-aware-medical-llm-verifier"
 LEDGER_PATH = "monitoring/universal-telegram-alert-ledger.json"
@@ -62,6 +63,11 @@ WATCHED = {
         "kind": "tiny_inference", "commit": TINY_SHA,
         "label": "Untrained GPU Transformer pilot",
     },
+    "cpu-telegram-e2e-v1": {
+        "kernel": "yeatasimbillah/medical-llm-telegram-cpu-e2e-v1",
+        "kind": "cpu_telegram_e2e", "commit": "fixed-protocol-v1",
+        "label": "Private synthetic CPU Telegram e2e smoke v1",
+    },
     "medhallu-metadata": {
         "kernel": "yeatasimbillah/medical-llm-medhallu-metadata-audit",
         "kind": "medhallu_metadata",
@@ -73,6 +79,7 @@ WATCHED = {
 WORKFLOWS = {
     "Research Repository CI",
     "Kaggle CPU Pilot Controller",
+    "Kaggle CPU Telegram End-to-End Smoke",
     "Kaggle Private GPU Smoke Controller",
     "Kaggle GPU Tiny Transformer Inference Controller",
     "Verify Submitted Private Kaggle GPU Smoke",
@@ -329,6 +336,9 @@ def check_checkpoint(kind: str, folder: Path, commit: str) -> str:
         if (kind == "cpu_b" and (n, state["status"]) != (80, "in_progress")):
             raise AlertError("CPU_B_SESSION_PROGRESS_MISMATCH")
         return f"Saved verified checkpoint {n}/100 (synthetic CPU session)."
+    if kind == "cpu_telegram_e2e":
+        verify_cpu_e2e(folder)
+        return "Independent no-data CPU synthetic output verified (5/5)."
     if kind == "cuda_smoke":
         state = verify_cuda(folder, expected_commit=commit)
         if state["device"] != "cuda:0":

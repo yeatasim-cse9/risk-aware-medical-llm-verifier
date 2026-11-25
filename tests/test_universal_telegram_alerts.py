@@ -28,6 +28,10 @@ def ledger():
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     baseline["bootstrap_sent"] = False
     baseline["github_events"] = []
+    # Other alert tests intentionally isolate the existing historical jobs.
+    baseline["kaggle_events"]["cpu-telegram-e2e-v1"] = {
+        "last_event": "cpu-telegram-e2e-v1:complete", "delivery": "sent",
+    }
     # Older synthetic-only tests intentionally exclude pending public metadata pilot.
     baseline["kaggle_events"]["medhallu-metadata"] = {
         "last_event": "medhallu-metadata:complete", "delivery": "sent",
@@ -58,7 +62,7 @@ class UniversalAlertsTests(unittest.TestCase):
         self.assertTrue(all(
             x["delivery"] == "historical_suppressed"
             for k, x in data["kaggle_events"].items()
-            if k != "medhallu-metadata"
+            if k not in {"medhallu-metadata", "cpu-telegram-e2e-v1"}
         ))
         fresh = json.loads(BASELINE.read_text(encoding="utf-8"))
         medhallu = fresh["kaggle_events"]["medhallu-metadata"]

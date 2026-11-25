@@ -1,0 +1,80 @@
+name: Kaggle CPU Telegram End-to-End Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "prepare = safe build only; submit = ONE approved private CPU Kaggle launch"
+        type: choice
+        options: [prepare, submit]
+        default: prepare
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kaggle-telegram-cpu-e2e-v1
+  cancel-in-progress: false
+
+jobs:
+  cpu-e2e:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout reviewed main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify package and monitoring safeguards offline
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_cpu_telegram_e2e.py -v
+          python -m unittest discover -s tests -p test_universal_telegram_alerts.py -v
+          python scripts/cpu_telegram_e2e.py build build/telegram-cpu-e2e
+          python -m py_compile build/telegram-cpu-e2e/runner.py
+          python - <<'PY'
+          import json
+          m=json.load(open('build/telegram-cpu-e2e/kernel-metadata.json'))
+          assert m['id']=='yeatasimbillah/medical-llm-telegram-cpu-e2e-v1'
+          assert m['is_private'] is True
+          assert all(m[x] is False for x in ('enable_gpu','enable_tpu','enable_internet'))
+          assert all(m[x] == [] for x in ('dataset_sources','competition_sources','kernel_sources','model_sources'))
+          print('CPU_E2E_NO_GPU_NO_DATA_NO_INTERNET_CONFIRMED')
+          PY
+      - name: Upload code-only package for optional inspection
+        if: inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-telegram-e2e-source-${{ github.run_id }}
+          path: build/telegram-cpu-e2e/
+          retention-days: 7
+      - name: Require Kaggle credential and install pinned CLI
+        if: inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "::error::Missing KAGGLE_API_TOKEN"
+            exit 1
+          fi
+          python -m pip install "kaggle==2.2.5" "six==1.17.0"
+      - name: Refuse overwriting a previous notebook and submit once
+        if: inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/kaggle_status.py yeatasimbillah/medical-llm-telegram-cpu-e2e-v1 --require any > build/telegram-cpu-status.txt
+          if ! grep -qx 'Kernel status: yeatasimbillah/medical-llm-telegram-cpu-e2e-v1 = missing' build/telegram-cpu-status.txt; then
+            echo "::error::Notebook already exists; never overwrite or resubmit v1"
+            exit 1
+          fi
+          kaggle kernels push -p build/telegram-cpu-e2e
+          echo "CPU_E2E_KAGGLE_SUBMISSION_ACCEPTED_NOT_EXECUTION_COMPLETED"

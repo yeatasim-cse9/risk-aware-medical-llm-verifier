@@ -25,6 +25,10 @@
     "medhallu-metadata": {
       "delivery": "sent",
       "last_event": "medhallu-metadata:complete"
+    },
+    "cpu-telegram-e2e-v1": {
+      "last_event": null,
+      "delivery": "none"
     }
   },
   "schema_version": 1,
