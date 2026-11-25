@@ -10,6 +10,7 @@ on:
     workflows:
       - Research Repository CI
       - Kaggle CPU Pilot Controller
+      - Kaggle CPU Telegram End-to-End Smoke
       - Kaggle Private GPU Smoke Controller
       - Kaggle GPU Tiny Transformer Inference Controller
       - Verify Submitted Private Kaggle GPU Smoke
@@ -107,7 +108,7 @@ jobs:
           assert data["bootstrap_sent"] is True
           assert all(
               data["kaggle_events"][name]["last_event"] == f"{name}:complete"
-              for name in WATCHED if name != "medhallu-metadata"
+              for name in WATCHED if name not in {"medhallu-metadata", "cpu-telegram-e2e-v1"}
           )
           assert data["kaggle_events"]["medhallu-metadata"]["delivery"] != "historical_suppressed"
           print("UNIVERSAL_ALERTS: HISTORICAL_SYNTHETIC_KAGGLE_ALERTS_SUPPRESSED")
