@@ -16,14 +16,21 @@ class KaggleMetadataPackageTests(unittest.TestCase):
             d = Path(temp) / "kernel"
             record = builder.build("f" * 40, d)
             self.assertEqual({p.name for p in d.iterdir()},
-                             {"manager.py", "runner.py", "kernel-metadata.json"})
+                             {"runner.py", "kernel-metadata.json"})
             self.assertTrue(record["is_private"])
             self.assertFalse(record["enable_gpu"])
             self.assertTrue(record["enable_internet"])
             self.assertEqual(record["dataset_sources"], [])
             self.assertIn("f" * 40, (d / "runner.py").read_text(encoding="utf-8"))
             self.assertNotIn("load_dataset", (d / "runner.py").read_text(encoding="utf-8"))
-            self.assertNotIn("load_dataset", (d / "manager.py").read_text(encoding="utf-8"))
+            runner = (d / "runner.py").read_text(encoding="utf-8")
+            self.assertNotIn("from manager", runner)
+            self.assertIn("def fetch_public_metadata", runner)
+            standalone_spec = importlib.util.spec_from_file_location("standalone_metadata_runner", d / "runner.py")
+            standalone = importlib.util.module_from_spec(standalone_spec)
+            standalone_spec.loader.exec_module(standalone)
+            self.assertEqual(standalone.SOURCE_COMMIT, "f" * 40)
+            self.assertTrue(callable(standalone.build_report))
 
     def test_stale_directory_and_bad_sha_rejected(self):
         with tempfile.TemporaryDirectory() as temp:

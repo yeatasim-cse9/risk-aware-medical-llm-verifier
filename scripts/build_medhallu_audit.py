@@ -4,7 +4,6 @@ import argparse
 import json
 from pathlib import Path
 import re
-import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 KERNEL = "yeatasimbillah/medical-llm-medhallu-metadata-audit"
@@ -15,17 +14,20 @@ def build(source_commit: str, output: Path) -> dict:
     if output.exists() and any(output.iterdir()):
         raise FileExistsError("Refusing stale Kaggle package directory")
     output.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "src" / "research_data" / "manager.py", output / "manager.py")
+    source = (ROOT / "src" / "research_data" / "manager.py").read_text(encoding="utf-8")
+    # Kaggle executes code_file independently; do not rely on sibling Python files.
+    entrypoint = 'if __name__ == "__main__":\n    main()\n'
+    if source.count(entrypoint) != 1 or not source.endswith(entrypoint):
+        raise ValueError("Manager entrypoint absent or ambiguous; refusing package")
     runner = (
-        '"""MedHallu public metadata only; NO dataset rows are requested."""\n'
-        "from pathlib import Path\n"
-        "from manager import build_report, verify_report, write_report\n"
-        f"SOURCE_COMMIT = {source_commit!r}\n"
-        "if __name__ == '__main__':\n"
-        "    report = build_report(SOURCE_COMMIT)\n"
-        "    verify_report(report, SOURCE_COMMIT)\n"
-        "    write_report(report, Path('/kaggle/working'))\n"
-        "    print('PRIVATE_MEDHALLU_METADATA_ONLY_COMPLETED')\n"
+        source[:-len(entrypoint)]
+        + "\n"
+        + f"SOURCE_COMMIT = {source_commit!r}\n"
+        + "if __name__ == '__main__':\n"
+        + "    report = build_report(SOURCE_COMMIT)\n"
+        + "    verify_report(report, SOURCE_COMMIT)\n"
+        + "    write_report(report, Path('/kaggle/working'))\n"
+        + "    print('PRIVATE_MEDHALLU_METADATA_ONLY_COMPLETED')\n"
     )
     (output / "runner.py").write_text(runner, encoding="utf-8")
     metadata = {

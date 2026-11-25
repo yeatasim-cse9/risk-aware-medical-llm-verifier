@@ -33,8 +33,9 @@ python scripts/build_medhallu_audit.py --commit <exact-40-char-SHA> --out build/
 
 1. GitHub Actions: **MedHallu Metadata Audit Controller → prepare** (code-only package; no Kaggle quota).
 2. Manual launch from Actions: **submit** only after reviewing CPU quota and setting `confirm_cpu_quota=true`. The run is a **private CPU notebook with internet enabled** only to request public Hugging Face *metadata*. It does not download dataset rows.
-3. **status**, then **verify** using the exact submitted Git SHA. Verification downloads only the non-sensitive metadata manifest.
-4. Review observed native columns, declared license, data lineage and absence of verified native labels; approve a later version-pinned authorized row audit before training E1.
+3. When an existing notebook is in confirmed `error` state, use **retry_failed**, not `submit`, with an explicit fresh `confirm_cpu_quota=true` approval. This may replace ONLY the named private metadata notebook; it refuses active/completed/missing notebooks. The packed `runner.py` is self-contained so Kaggle cannot lose a sibling import.
+4. **status**, then **verify** using the exact submitted Git SHA. Verification downloads only the non-sensitive metadata manifest.
+5. Review observed native columns, declared license, data lineage and absence of verified native labels; approve a later version-pinned authorized row audit before training E1.
 
 ## Reproducibility limitations
 

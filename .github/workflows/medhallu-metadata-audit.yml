@@ -13,13 +13,13 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "prepare, preflight, submit, status, or verify"
+        description: "prepare, preflight, submit, retry_failed, status, or verify"
         type: choice
-        options: [prepare, preflight, submit, status, verify]
+        options: [prepare, preflight, submit, retry_failed, status, verify]
         default: prepare
         required: true
       confirm_cpu_quota:
-        description: "For submit: I approve use of Kaggle CPU notebook resources"
+        description: "For submit/retry_failed: I approve Kaggle CPU notebook resources"
         type: boolean
         default: false
       source_commit:
@@ -66,12 +66,12 @@ jobs:
           python -m unittest discover -s tests -p test_master_data_modules.py -v
           python -m unittest discover -s tests -p test_medhallu_kaggle_package.py -v
       - name: Build code-only private CPU metadata package
-        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit'
+        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit' || inputs.operation == 'retry_failed'
         shell: bash
         run: |
           set -euo pipefail
           python scripts/build_medhallu_audit.py --commit "$(git rev-parse HEAD)" --out build/medhallu-metadata
-          python -m py_compile build/medhallu-metadata/runner.py build/medhallu-metadata/manager.py
+          python -m py_compile build/medhallu-metadata/runner.py
           python - <<'PY'
           import json
           from pathlib import Path
@@ -79,7 +79,7 @@ jobs:
           m = json.loads((p/"kernel-metadata.json").read_text())
           assert m["is_private"] is True and m["enable_gpu"] is False
           assert m["enable_internet"] is True and not m["dataset_sources"]
-          assert {f.name for f in p.iterdir()} == {"runner.py", "manager.py", "kernel-metadata.json", "__pycache__"}
+          assert {f.name for f in p.iterdir()} == {"runner.py", "kernel-metadata.json", "__pycache__"}
           print("METADATA_ONLY_PRIVATE_CPU_PACKAGE_VALIDATED")
           PY
       - name: Retain code-only preparation artifact
@@ -89,11 +89,10 @@ jobs:
           name: medhallu-metadata-code-${{ github.run_id }}
           path: |
             build/medhallu-metadata/runner.py
-            build/medhallu-metadata/manager.py
             build/medhallu-metadata/kernel-metadata.json
           retention-days: 7
       - name: Install Kaggle CLI for controller operations
-        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status' || inputs.operation == 'verify')
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'retry_failed' || inputs.operation == 'status' || inputs.operation == 'verify')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
@@ -104,17 +103,18 @@ jobs:
           fi
           python -m pip install "kaggle==2.2.5" "six==1.17.0"
       - name: Kaggle quota read-only preflight
-        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit')
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'retry_failed')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
           set -euo pipefail
           kaggle quota > /dev/null 2>&1 || { echo "::error::Quota query failed; no submission"; exit 1; }
           echo "KAGGLE_QUOTA_ENDPOINT_OK; CPU availability not guaranteed"
-      - name: Require approval and empty remote notebook slot
-        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+      - name: Require approval and the correct prior remote state
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'submit' || inputs.operation == 'retry_failed')
         shell: bash
         env:
+          OPERATION: ${{ inputs.operation }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           APPROVED: ${{ inputs.confirm_cpu_quota }}
         run: |
@@ -125,12 +125,16 @@ jobs:
           fi
           python - <<'PY'
           from scripts.kaggle_status import check
-          if check("yeatasimbillah/medical-llm-medhallu-metadata-audit", "any") != "missing":
-              raise SystemExit("REMOTE_METADATA_NOTEBOOK_ALREADY_EXISTS; no overwrite")
-          print("MEDHALLU_METADATA_REMOTE_SLOT_FREE")
+          import os
+          state = check("yeatasimbillah/medical-llm-medhallu-metadata-audit", "any")
+          operation = os.environ["OPERATION"]
+          expected = "missing" if operation == "submit" else "error"
+          if state != expected:
+              raise SystemExit("REMOTE_METADATA_NOTEBOOK_STATE_NOT_AUTHORIZED_FOR_" + operation.upper())
+          print("MEDHALLU_METADATA_REMOTE_STATE_AUTHORIZED_FOR_" + operation.upper())
           PY
       - name: Submit private metadata-only CPU notebook
-        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'submit' || inputs.operation == 'retry_failed')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
@@ -141,7 +145,14 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.operation == 'status'
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-        run: python scripts/kaggle_status.py yeatasimbillah/medical-llm-medhallu-metadata-audit --require any
+        run: |
+          python - <<'PY'
+          from scripts.kaggle_status import check
+          state = check("yeatasimbillah/medical-llm-medhallu-metadata-audit", "any")
+          if state in {"error", "failed", "cancelled", "cancelacknowledged"}:
+              raise SystemExit("KAGGLE_METADATA_NOTEBOOK_EXECUTION_FAILED: " + state)
+          print("KAGGLE_METADATA_NOTEBOOK_CURRENT_STATE=" + state)
+          PY
       - name: Download and verify safe metadata output only
         if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
         env:
