@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 from bisect import bisect_right
 from itertools import combinations
 import hashlib
+import hmac
 import json
 import random
 
@@ -12,6 +13,7 @@ SPLITS=("train","dev","test","official_holdout")
 PAIRS=tuple(combinations(SPLITS,2))
 SEED=20261125
 RUBRIC={"same_source","near_duplicate","topic_only","clinically_distinct","unresolved"}
+CLINICAL={"supported","contradicted","insufficient_evidence","ambiguous","not_applicable"}
 GATES=("dataset_rights","source_provenance_review","semantic_disposition",
        "clinical_label_review","independent_scientific_approval",
        "locked_analysis_protocol","private_manifest_review")
@@ -157,22 +159,25 @@ def balance(records,retained):
             out[s]["by_config"][cfg]={f:compare(a,b,f) for f in ("category","difficulty")}
     return out
 
-def reviewer_summary(expected,first,second,adjudicated):
+def reviewer_summary(expected,first,second,adjudicated,*,clinical=False):
     """Structural coverage and agreement only; cannot authenticate human judgments."""
+    require(type(clinical) is bool,"REVIEW_MODE")
+    vocabulary=CLINICAL if clinical else RUBRIC
+    unresolved={"insufficient_evidence","ambiguous","not_applicable"} if clinical else {"unresolved"}
     require(type(expected) is set and bool(expected),"REVIEW_EXPECTED")
     for v in (first,second):
-        require(type(v) is dict and set(v)==expected and all(type(x) is str and x in RUBRIC
+        require(type(v) is dict and set(v)==expected and all(type(x) is str and x in vocabulary
                 for x in v.values()),"REVIEW_COVERAGE")
-    needed={k for k in expected if first[k]!=second[k] or first[k]=="unresolved"}
+    needed={k for k in expected if first[k]!=second[k] or first[k] in unresolved}
     require(type(adjudicated) is dict and set(adjudicated)==needed and
-            all(type(x) is str and x in RUBRIC for x in adjudicated.values()),"ADJUDICATION_COVERAGE")
+            all(type(x) is str and x in vocabulary for x in adjudicated.values()),"ADJUDICATION_COVERAGE")
     n=len(expected);agree=sum(first[k]==second[k] for k in expected)
     a,b=Counter(first.values()),Counter(second.values())
-    pe=sum(a[v]*b[v] for v in RUBRIC)/n**2
+    pe=sum(a[v]*b[v] for v in vocabulary)/n**2
     return {"n":n,"agreement_count":agree,"agreement":agree/n,
             "cohen_kappa":(agree/n-pe)/(1-pe) if pe<1 else None,
             "adjudication_required":len(needed),
-            "unresolved":sum(adjudicated.get(k,first[k])=="unresolved" for k in expected),
+            "unresolved":sum(adjudicated.get(k,first[k]) in unresolved for k in expected),
             "human_authenticity_verified":False,"scientific_approval":False}
 
 def freeze_preparation(mapping,expected_digest,evidence):
@@ -192,3 +197,74 @@ def freeze_preparation(mapping,expected_digest,evidence):
     return {"missing_gates":[k for k in GATES if not evidence[k]],
             "external_authentication_required":True,"final_split_approved":False,
             "final_split_frozen":False,"scientific_e1_experiment_executed":False}
+
+def private_token(nonce,kind,value):
+    require(type(nonce) is bytes and len(nonce)>=32,"PRIVATE_REVIEW_NONCE")
+    payload=json.dumps([kind,value],sort_keys=True,separators=(",",":"),
+                       ensure_ascii=True).encode()
+    return hmac.new(nonce,payload,hashlib.sha256).hexdigest()
+
+def semantic_packets(records,queue,nonce):
+    """Authorized private environment only. Do not display or export packets.
+
+    Blind proposed split, semantic flag, similarity and answer roles.
+    Source identity is necessary evidence for source-equivalence adjudication.
+    Return reviewer packets and separate custodian-only key.
+    """
+    validate(records,{p:set() for p in PAIRS})
+    rows={r["key"]:r for s in SPLITS for r in records[s]}
+    packets=[]; key={}
+    require(type(queue) is list and bool(queue),"QUEUE_SCHEMA")
+    for q in queue:
+        require(type(q) is dict and "pair" in q and type(q["pair"]) is tuple and
+                len(q["pair"])==2 and all(k in rows for k in q["pair"]),"QUEUE_PAIR")
+        pair=q["pair"]
+        token=private_token(nonce,"semantic",pair)
+        require(token not in key,"DUPLICATE_REVIEW_PAIR")
+        sides=list(pair)
+        if int(token[-1],16)%2: sides.reverse()
+        packets.append({"review_id":token,"cases":[
+            {f:rows[k][f] for f in ("question","context","source")} for k in sides]})
+        key[token]=pair
+    packets.sort(key=lambda x:x["review_id"])
+    return packets,key
+
+def clinical_review_plan(records,answers,allocation,nonce):
+    """Private preregistered stratified paired-role clinical review.
+
+    Allocation is explicit for every observed candidate stratum. Neither
+    official holdout answers nor reviewer outcomes may enter the sample plan.
+    Returns private blinded packets + separate custodian role key and strata.
+    """
+    validate(records,{p:set() for p in PAIRS})
+    groups=defaultdict(list)
+    rows={}
+    for s in SPLITS[:3]:
+        for row in records[s]:
+            k=row["key"];rows[k]=row
+            groups[(s,row["config"],row["category"],row["difficulty"])].append(k)
+    require(type(answers) is dict and set(answers)==set(rows),"CLINICAL_ANSWER_COVERAGE")
+    require(all(type(a) is tuple and len(a)==2 and
+                all(type(x) is str and x.strip() for x in a) for a in answers.values()),
+            "CLINICAL_ANSWER_PAIR")
+    require(type(allocation) is dict and set(allocation)==set(groups),"CLINICAL_ALLOCATION")
+    packets=[];key={};strata={}
+    for i,g in enumerate(sorted(groups)):
+        population=sorted(groups[g])
+        n=allocation[g]
+        require(type(n) is int and 0<=n<=len(population),"CLINICAL_SAMPLE_SIZE")
+        selected=random.Random(SEED+2000+i).sample(population,n)
+        strata[g]={"population":len(population),"sample":n}
+        for k in selected:
+            parent_token=private_token(nonce,"clinical-parent",k)
+            order=(1,0) if int(parent_token[-1],16)%2 else (0,1)
+            for role in order:
+                token=private_token(nonce,"clinical-answer",(k,role))
+                require(token not in key,"DUPLICATE_REVIEW_ANSWER")
+                packets.append({"review_id":token,"question":rows[k]["question"],
+                    "context":rows[k]["context"],"source":rows[k]["source"],
+                    "answer":answers[k][role]})
+                key[token]=(k,role)
+    require(bool(packets),"EMPTY_CLINICAL_SAMPLE")
+    packets.sort(key=lambda x:x["review_id"])
+    return packets,key,strata
