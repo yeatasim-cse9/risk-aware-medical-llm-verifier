@@ -88,8 +88,11 @@ class TestMaster01B(unittest.TestCase):
                              "left_rows":int(mask.any(axis=1).sum()),"right_rows":int(mask.any(axis=0).sum())})
         # Union remains set even when a second encoder flags disjoint pairs.
         before=union.copy()
-        m.compare_windows([torch.tensor([[0.,-1.]])]*3,right,union)
-        self.assertTrue(np.array_equal(union,before))
+        second=[torch.tensor([[0.,1.]])]*3
+        m.compare_windows(second,right,union)
+        second_scores=np.array([[float((a@b.T).max()) for b in right] for a in second])
+        self.assertTrue(np.array_equal(union,before|(second_scores>=0.8)))
+        self.assertGreater(int(union.sum()),int(before.sum()))
 
     def test_lexical_sample_no_row_export(self):
         try:
