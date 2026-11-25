@@ -14,17 +14,17 @@ on:
     inputs:
       operation:
         type: choice
-        description: "prepare, preflight, submit one private CPU notebook, status, or verify aggregate"
-        options: [prepare, preflight, submit, status, verify]
+        description: "prepare, preflight, submit, retry_failed on confirmed Kaggle error, status, or verify aggregate"
+        options: [prepare, preflight, submit, retry_failed, status, verify]
         default: prepare
         required: true
       confirm_private_dataset_rights:
         type: boolean
-        description: "Submit only: I reviewed MedHallu/PubMedQA MIT terms AND NLM abstract copyright; private Kaggle analysis authorized, no redistribution"
+        description: "Submit/retry_failed only: I reviewed MedHallu/PubMedQA MIT terms AND NLM abstract copyright; private Kaggle analysis authorized, no redistribution"
         default: false
       confirm_cpu_quota:
         type: boolean
-        description: "Submit only: I authorize this one private CPU-only Kaggle run"
+        description: "Submit/retry_failed only: I authorize this one private CPU-only Kaggle run"
         default: false
       source_commit:
         type: string
@@ -70,7 +70,7 @@ jobs:
           python -m unittest discover -s tests -p test_medhallu_native_audit.py -v
           python -m unittest discover -s tests -p test_e1_readiness.py -v
       - name: Build private code-only Kaggle CPU audit package
-        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit'
+        if: github.event_name == 'push' || inputs.operation == 'prepare' || inputs.operation == 'submit' || inputs.operation == 'retry_failed'
         run: |
           set -euo pipefail
           python scripts/medhallu_private_rows.py build build/medhallu-native-private --source-commit "$(git rev-parse HEAD)"
@@ -99,7 +99,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Require Kaggle secret and pinned CLI for read/submit operations
-        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status' || inputs.operation == 'verify')
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'retry_failed' || inputs.operation == 'status' || inputs.operation == 'verify')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
@@ -110,7 +110,7 @@ jobs:
           fi
           python -m pip install "kaggle==2.2.5" "six==1.17.0"
       - name: Check Kaggle notebook state read-only
-        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'status')
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit' || inputs.operation == 'retry_failed' || inputs.operation == 'status')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           OPERATION: ${{ inputs.operation }}
@@ -124,10 +124,12 @@ jobs:
           state=check(kernel,"any")
           if operation == "submit" and state != "missing":
               raise SystemExit("PRIVATE_NATIVE_JOB_ALREADY_EXISTS_BLOCK_REPEAT_SUBMISSION")
+          if operation == "retry_failed" and state != "error":
+              raise SystemExit("PRIVATE_NATIVE_RETRY_ONLY_FOR_CONFIRMED_ERROR")
           print("MEDHALLU_PRIVATE_NATIVE_REMOTE_STATE="+state)
           PY
       - name: Fail closed unless rights and CPU quota are independently approved
-        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'submit' || inputs.operation == 'retry_failed')
         env:
           DATA_RIGHTS_APPROVED: ${{ inputs.confirm_private_dataset_rights }}
           CPU_APPROVED: ${{ inputs.confirm_cpu_quota }}
@@ -139,22 +141,22 @@ jobs:
           fi
           echo "PRIVATE_DATA_RIGHTS_AND_CPU_APPROVAL_GATES_PASSED"
       - name: Ensure Kaggle quota endpoint can be queried
-        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit')
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || (inputs.operation == 'submit' || inputs.operation == 'retry_failed'))
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
           set -euo pipefail
           kaggle quota > /dev/null 2>&1 || { echo "::error::Quota API unavailable; no submission"; exit 1; }
           echo "KAGGLE_QUOTA_ENDPOINT_ACCESSIBLE_CPU_QUOTA_AMOUNT_NOT_ASSERTED"
-      - name: One-time private Kaggle CPU submission — no scientific E1 experiment
-        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+      - name: Explicit private Kaggle CPU submission or failed-only retry — no scientific E1 experiment
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'submit' || inputs.operation == 'retry_failed')
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
           set -euo pipefail
           echo "MEDHALLU_NATIVE_AUDIT_SOURCE_COMMIT=$(git rev-parse HEAD)"
           kaggle kernels push -p build/medhallu-native-private
-          echo "MEDHALLU_PRIVATE_NATIVE_AUDIT_SUBMITTED_NOT_EXECUTED_OR_VERIFIED"
+          echo "MEDHALLU_PRIVATE_NATIVE_AUDIT_SUBMITTED_OR_FAILED_ONLY_RETRIED_NOT_EXECUTED_OR_VERIFIED"
       - name: Verify saved aggregate only, after confirmed Kaggle completion
         if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
         env:
