@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "kind": "user_supplied_private_kaggle_advanced_source_lineage_report_checksum_checked",
+  "observation_date": "2026-11-25",
+  "verification_scope": "user-pasted aggregate canonical JSON integrity SHA256 independently recomputed; source metadata and prior GitHub data pins checked; manual Kaggle output not independently retrieved",
+  "input_report_sha256": "da1ba059f139fecf8330bd6f43a4f3c55e52146ec9186e70f8ac086d3be2cc75",
+  "original_report_type": "e1_pubmedqa_source_lineage_advanced_leakage_v1",
+  "source_git_sha": "8ac57dcd1272d9c20ee61d506fb73c11c7cc03f7",
+  "medhallu_revision": "515060458a945c633debc6fd5baac7764416b724",
+  "pubmedqa_revision": "323752ad243ce751ba75c9222d34a3130d080030",
+  "pubmedqa_official_test_git_revision": "1cbae8e92f72f20c8d3747cbb3bf5bc53554d997",
+  "pubmedqa_official_test_file_sha256": "939fe566f09017d13b1ca64d2ddfee0bc2374b366048152997669cccedc44d51",
+  "prior_candidate_assignment_sha256": "ddd32f57ebc49ec6591cffd2d953a869c30518525bf66d6e2fb931a68bb0945f",
+  "previous_medhallu_candidate_total": 9997,
+  "resolved_exact_pubmedqa_pubid_parent_rows": 9974,
+  "ambiguous_multiple_pubids_parent_rows": 23,
+  "unmatched_parent_rows": 0,
+  "context_exact_agreement_parent_rows": 9974,
+  "distinct_matched_pubmedqa_pubids": 9974,
+  "official_original_500_test_overlap_by_old_candidate_split": {
+    "train": 401,
+    "dev": 61,
+    "test": 38
+  },
+  "exact_source_pubmedqa_pubid_groups_spanning_old_splits": 0,
+  "advanced_near_screen": {
+    "compared_cross_split_candidate_pairs": 23949,
+    "flagged_high_overlap_pairs": 0,
+    "high_frequency_block_buckets_skipped": 6,
+    "candidate_limit_reached": false,
+    "semantic_paraphrase_search_performed": false,
+    "complete_pairwise_search": false
+  },
+  "scientific_readiness": {
+    "source_article_provenance_fully_certified": false,
+    "all_source_ids_unambiguous": false,
+    "original_500_official_test_excluded_from_old_train": false,
+    "final_leakage_free_split_approved": false,
+    "label_roles_adjudicated": false,
+    "scientific_model_experiment_executed": false
+  },
+  "next_provisional_action": "quarantine 23 ambiguous records; remove all 500 official PubMedQA original test records from new provisional MedHallu development partitions; regroup remaining by source PubMedQA PMID plus exact Question/Knowledge proxies; independently reassess and seek approval",
+  "leakage_interpretation": "These 401 train overlapping original PubMedQA heldout IDs represent external benchmark contamination risk, not proof of MedHallu internal train/test leakage or model training."
+}
