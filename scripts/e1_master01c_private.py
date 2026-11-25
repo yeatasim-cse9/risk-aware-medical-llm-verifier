@@ -36,6 +36,13 @@ EXPECTED_MAX={
               "question":(.7679858,.7864698,.7360821,.9094671,.8618726,.9268393)},
     "pubmedbert":{"context":(.8465978,.8504726,.8123976,.8757358,.8847558,.9094917),
                   "question":(.7607752,.8390777,.7430628,.8627837,.8386818,.8889172)}}
+DATA_PINS={"medhallu_revision":"515060458a945c633debc6fd5baac7764416b724",
+           "pubmedqa_revision":"323752ad243ce751ba75c9222d34a3130d080030",
+           "official_500_sha256":"939fe566f09017d13b1ca64d2ddfee0bc2374b366048152997669cccedc44d51",
+           "source_sha256":{"medhallu":{"pqa_artificial":"70de8ce7f89a38314fa231a12e45168f3ee1aa591e8a38f6556b89aa8b1ca513",
+                                        "pqa_labeled":"ac963f9aaeb163f494edd4dbfec04086c3e35c7cc55e3f9c8b1d7b31188fa34c"},
+                            "pubmedqa":{"pqa_artificial":"cdee2d3c01369f47d2ea7b89cd32ee64b142cc0debcb863bf39b3a81a3cece05",
+                                        "pqa_labeled":"3d56bd1abc11884579ecc3aab9dd3cdfce8b7cf54715daeca93b8022b7be231c"}}}
 MAX_TOL=1e-5
 EXPECTED_UNION=dict(zip(MAX_KEYS,(5,3,2,60,28,73)))
 EXPECTED_ENDPOINTS={"train":152,"dev":57,"test":61,"official_holdout":27}
@@ -77,12 +84,15 @@ def verify_screen(encoders,review,affected,diagnostics,exact):
         require(core.digest(x)==h,"AGGREGATE_REPRODUCTION")
     return maxima
 
-def reconstruct_private(root):
+def reconstruct_private(root,*,return_private=False):
     """Preserve prior ordering, verified mapping and unique PMID/context lineage.
 
     Only question/context and source identity are used from the official holdout.
     Candidate labels/answers never enter semantic screening.
     """
+    require(os.environ.get("MASTER01C_PRIVATE_RIGHTS_CONFIRMED")=="YES","RIGHTS_REQUIRED")
+    if return_private:
+        require(os.environ.get("MASTER01C_PRIVATE_REVIEW_CONFIRMED")=="YES","PRIVATE_REVIEW_REQUIRED")
     pkg=root/"research_data"
     pkg.mkdir()
     (pkg/"__init__.py").write_text("")
@@ -98,6 +108,11 @@ def reconstruct_private(root):
     candidate=importlib.import_module("research_data.e1_candidate_splits")
     advanced=importlib.import_module("research_data.e1_advanced_lineage")
     hard=importlib.import_module("research_data.e1_pubmedqa_test_exclusion")
+    require(helper.MEDHALLU_REVISION==DATA_PINS["medhallu_revision"] and
+            helper.PUBMEDQA_REVISION==DATA_PINS["pubmedqa_revision"] and
+            {"medhallu":{k:v[2] for k,v in helper.SOURCE_SHA256.items()},
+             "pubmedqa":{k:v[2] for k,v in helper.PUBMEDQA_SHA256.items()}}
+            ==DATA_PINS["source_sha256"],"DATASET_PIN")
     snap,pq=helper.libraries()
     med=helper.checked_parquet(snap,pq,helper.MEDHALLU,helper.MEDHALLU_REVISION,
                                 helper.SOURCE_SHA256,root/"med",is_source=False)
@@ -118,6 +133,7 @@ def reconstruct_private(root):
             ==base.EXPECTED_MAPPING,"INDEPENDENT_MAPPING_PIN")
     diagnostics=base.grouped_diagnostics(med,assignment)
     records={s:[] for s in core.SPLITS}
+    answers={}
     for (c,i),s in sorted(assignment.items()):
         row=med[c][i]
         matches=[m for cfg in index for m in index[cfg].get(advanced.fingerprint(row["Question"]),[])]
@@ -128,6 +144,8 @@ def reconstruct_private(root):
         # Validate both paired answer roles exist, without using text for screen.
         require(all(type(row.get(k)) is str and row[k].strip()
                     for k in ("Ground Truth","Hallucinated Answer")),"PAIRED_ANSWER_SCHEMA")
+        if return_private:
+            answers[c,i]=(row["Ground Truth"],row["Hallucinated Answer"])
         records[s].append({"key":(c,i),"source":pid,"question":row["Question"],
             "context":" ".join(row["Knowledge"]),"config":c,
             "category":row["Category of Hallucination"],"difficulty":row["Difficulty Level"]})
@@ -150,8 +168,8 @@ def reconstruct_private(root):
     require(core.digest(exact)==EXPECTED_EXACT and core.digest(diagnostics)==EXPECTED_DIAGNOSTICS,
             "SOURCE_REPRODUCTION")
     core.validate(records,{p:set() for p in core.PAIRS})
-    # med contains candidate answers and is not returned by the semantic adapter.
-    return records,advanced._norm,diagnostics,exact
+    # Only separately authorized private reviewer sessions receive candidate answers.
+    return records,advanced._norm,diagnostics,exact,answers
 
 def screen(records,norm,diagnostics,exact,root,device):
     import numpy as np
@@ -227,7 +245,7 @@ def prepare_private(root, *, return_private=False):
         del groups,tok,model
         torch.cuda.empty_cache()
     stage("PINNED_SOURCE_RECONSTRUCTION")
-    records,norm,diagnostics,exact=reconstruct_private(root)
+    records,norm,diagnostics,exact,answers=reconstruct_private(root,return_private=return_private)
     flags,maxima=screen(records,norm,diagnostics,exact,root,device)
     stage("PRIVATE_REVIEW_AND_QUARANTINE")
     queue,strata=core.review_plan(records,flags,norm)
@@ -238,6 +256,8 @@ def prepare_private(root, *, return_private=False):
     report={"schema_version":1,"status":"PROVISIONAL_REMEDIATION_REVIEW_REQUIRED",
         "previous_evidence_sha256":PRIOR_EVIDENCE,"previous_mapping_sha256":base.EXPECTED_MAPPING,
         "seed":base.SEED,"encoder_aggregate_sha256":EXPECTED_ENCODERS,
+        "source_commit":base.BASE,"source_module_sha256":base.PINS,"dataset_pins":DATA_PINS,
+        "model_asset_set_sha256":EXPECTED_ASSETS,
         "maxima":maxima,"strata":strata,"review_queue_count":len(queue),
         "quarantine":quarantine,"balance":core.balance(records,retained),
         "versions":versions,"device":torch.cuda.get_device_name(0),
@@ -247,5 +267,6 @@ def prepare_private(root, *, return_private=False):
         "private_review_queue_persisted":False,"gates":gates}
     if return_private:
         # Private, authorized caller only. Do not display this tuple in notebooks.
-        return report,{"records":records,"review_queue":queue,"retained_mapping":mapping}
+        return report,{"records":records,"review_queue":queue,"retained_mapping":mapping,
+                       "candidate_answers":answers}
     return report
