@@ -17,8 +17,8 @@
       "last_event": "cpu-b:complete"
     },
     "cpu-telegram-e2e-v1": {
-      "delivery": "none",
-      "last_event": null
+      "delivery": "sent",
+      "last_event": "cpu-telegram-e2e-v1:complete"
     },
     "gpu-smoke": {
       "delivery": "historical_suppressed",
