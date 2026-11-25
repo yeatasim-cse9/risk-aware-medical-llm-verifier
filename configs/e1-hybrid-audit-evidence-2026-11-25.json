@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "user_supplied_e1_hybrid_private_kaggle_report_checked_2026_11_25",
+  "original_audit_kind": "e1_hybrid_private_label_and_lineage_screen_v1",
+  "verification_scope": "independent recomputation of JSON integrity checksum, consistency with frozen previous SHA256 values, GitHub module byte SHA256 comparison, and count consistency; independent Kaggle output retrieval NOT performed",
+  "source_git_sha": "5e5b08d8f3818d4557051db9f5badadebd69ea78",
+  "report_integrity_sha256": "b060a7a3f7bc8c449f36961bbdee10b12545feaf9f502b89edf0dc49369b7c3e",
+  "pinned_dataset_id": "UTAustin-AIHealth/MedHallu",
+  "pinned_dataset_revision_sha": "515060458a945c633debc6fd5baac7764416b724",
+  "pinned_source_parquet_sha256": {
+    "pqa_artificial": "70de8ce7f89a38314fa231a12e45168f3ee1aa591e8a38f6556b89aa8b1ca513",
+    "pqa_labeled": "ac963f9aaeb163f494edd4dbfec04086c3e35c7cc55e3f9c8b1d7b31188fa34c"
+  },
+  "matching_github_module_sha256": {
+    "e1_candidate_splits": "7f4c8aac27a7b682346cc5c8df92cbceb62cb7821bbda0257931b9fbf545cd4a",
+    "medhallu_native_audit": "a23b2b916c8165e4475bebe5c80a8d2aba39eee5494ef0514da234da98b1b30b"
+  },
+  "candidate_assignment_sha256": "ddd32f57ebc49ec6591cffd2d953a869c30518525bf66d6e2fb931a68bb0945f",
+  "counts": {
+    "original_parent_records": 10000,
+    "eligible_parent_records": 9997,
+    "quarantined_parent_records": 3,
+    "quarantined_repeated_question_rows": 2,
+    "quarantined_same_answer_rows": 1,
+    "answer_pair_examples": 19994,
+    "source_configs": {
+      "pqa_artificial": 9000,
+      "pqa_labeled": 1000
+    },
+    "parent_splits": {
+      "train": 7998,
+      "dev": 1000,
+      "test": 999
+    },
+    "answer_examples_splits": {
+      "train": 15996,
+      "dev": 2000,
+      "test": 1998
+    },
+    "category_unique_counts": {
+      "pqa_artificial": 4,
+      "pqa_labeled": 4
+    },
+    "difficulty_unique_counts": {
+      "pqa_artificial": 3,
+      "pqa_labeled": 3
+    },
+    "category_frequencies_without_names": {
+      "pqa_artificial": [
+        6848,
+        1096,
+        1010,
+        46
+      ],
+      "pqa_labeled": [
+        752,
+        212,
+        33,
+        3
+      ]
+    },
+    "difficulty_frequencies_without_names": {
+      "pqa_artificial": [
+        3182,
+        2926,
+        2892
+      ],
+      "pqa_labeled": [
+        408,
+        318,
+        274
+      ]
+    },
+    "cross_split_near_duplicate_candidate_pairs_compared": 1223,
+    "cross_split_high_trigram_overlap_flags": 0,
+    "eligible_questions_too_short_for_five_word_screen": 3,
+    "common_five_gram_buckets_skipped": 0,
+    "candidate_cap_reached": false
+  },
+  "scientific_claims": {
+    "pubmedqa_article_lineage_verified": false,
+    "full_semantic_near_duplicate_search_completed": false,
+    "dataset_roles_scientifically_adjudicated": false,
+    "final_splits_approved": false,
+    "scientific_model_experiment_executed": false,
+    "medical_text_or_source_ids_exported": false
+  },
+  "next_required_gates": [
+    "secure original PubMedQA article/PMID provenance or document irreducible ambiguity",
+    "human-review anonymized one repeated-question group and same-answer-role collision in private environment",
+    "validate four native category semantics and stratified class distributions without exporting source labels",
+    "validate source/configuration balance and near/semantic duplication with stronger leakage audit",
+    "freeze approved private split IDs after scientific review, then preregister baseline model and metrics"
+  ],
+  "note": "Aggregate consistency is proven, but no signed Kaggle attestation or independently retrieved manual notebook output. Zero found among 1223 candidate comparisons must not be called zero leakage."
+}
