@@ -1,0 +1,133 @@
+name: E1 MASTER 01 Private GPU Controller
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/e1-master01-private-gpu.yml
+      - scripts/e1_master01_workflow.py
+      - tests/test_e1_master01_workflow.py
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [preflight, prepare, submit, status, verify]
+        default: preflight
+        required: true
+      confirm_dataset_rights:
+        type: boolean
+        default: false
+        description: Confirm private MedHallu/PubMedQA and inherited abstract processing rights
+      confirm_one_gpu_run:
+        type: boolean
+        default: false
+        description: Approve exactly ONE new private Kaggle GPU audit after checking quota
+
+permissions:
+  contents: read
+concurrency:
+  group: e1-master01-private-gpu-v1
+  cancel-in-progress: false
+
+jobs:
+  master01:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Synthetic tests and pinned package
+        run: |
+          python -m unittest discover -s tests -p 'test_e1_master01*.py' -v
+          python scripts/e1_master01_workflow.py build --out build/master01-package
+          python -m py_compile build/master01-package/runner.py
+      - name: Code-only package
+        if: github.event_name == 'push' || inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: master01-private-code-only
+          path: |
+            build/master01-package/runner.py
+            build/master01-package/kernel-metadata.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Require explicit private data and GPU authorization
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          RIGHTS: ${{ inputs.confirm_dataset_rights }}
+          GPU: ${{ inputs.confirm_one_gpu_run }}
+        run: |
+          test "$RIGHTS" = true && test "$GPU" = true || { echo "MASTER01_APPROVAL_REQUIRED"; exit 1; }
+      - name: Install Kaggle CLI
+        if: github.event_name == 'workflow_dispatch' && inputs.operation != 'prepare'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          test -n "$KAGGLE_API_TOKEN" || { echo "KAGGLE_API_TOKEN_REQUIRED"; exit 1; }
+          python -m pip install kaggle==2.2.5 six==1.17.0
+      - name: Read-only quota and duplicate submission preflight
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'preflight' || inputs.operation == 'submit')
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/e1_master01_workflow.py preflight
+      - name: Notify controller start using GitHub secrets
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01_workflow.py notify --event 'controller started'
+      - name: Submit exactly one private GPU audit
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          kaggle kernels push -p build/master01-package >/dev/null 2>&1 || { echo "MASTER01_SUBMISSION_FAILED_OR_UNCERTAIN_CHECK_STATUS_NO_RETRY"; exit 1; }
+          echo "MASTER01_SUBMISSION_ACCEPTED_NOT_RUNTIME_COMPLETE"
+      - name: Notify accepted submission
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01_workflow.py notify --event 'submission accepted'
+      - name: Poll Kaggle actual runtime and verify completed sanitized report
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01_workflow.py monitor --out build/master01-verified
+      - name: Read-only remote status
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'status'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/e1_master01_workflow.py status
+      - name: Verify completed output independently without GPU submission
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/e1_master01_workflow.py verify --out build/master01-verified
+      - name: Upload strictly reduced verified aggregate only
+        if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'submit' || inputs.operation == 'verify') && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: master01-verified-aggregate
+          path: build/master01-verified/master01_verified_aggregate.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Notify verification success
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify' && success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01_workflow.py notify --event 'controller finished'
+      - name: Notify failure without exposing data
+        if: failure() && github.event_name == 'workflow_dispatch' && inputs.operation == 'submit'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01_workflow.py notify --event 'controller failed'
