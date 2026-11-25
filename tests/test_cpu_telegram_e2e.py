@@ -72,7 +72,9 @@ class CpuTelegramE2ETests(unittest.TestCase):
         validate_ledger(data)
         key = "cpu-telegram-e2e-v1"
         self.assertEqual(WATCHED[key]["kernel"], KERNEL)
-        self.assertEqual(data["kaggle_events"][key], {"last_event": None, "delivery": "none"})
+        # Real delivery ledger is mutable; test a pending notebook with an isolated fixture.
+        self.assertIn(data["kaggle_events"][key]["delivery"], ("none", "sent"))
+        data["kaggle_events"][key] = {"last_event": None, "delivery": "none"}
         with patch("universal_telegram_alerts.read_ledger", return_value=(data, "a"*40)), \
              patch("universal_telegram_alerts.check", return_value="missing") as check, \
              patch("universal_telegram_alerts.send_message") as send, \
