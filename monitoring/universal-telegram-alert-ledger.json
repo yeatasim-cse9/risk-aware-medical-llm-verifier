@@ -1,6 +1,8 @@
 {
   "bootstrap_sent": true,
-  "github_events": [],
+  "github_events": [
+    "github:45548640501:1:failure"
+  ],
   "kaggle_events": {
     "cpu-a": {
       "delivery": "historical_suppressed",
