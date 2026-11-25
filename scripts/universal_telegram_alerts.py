@@ -242,7 +242,11 @@ def github_alert_payload(event: object) -> tuple[str, str] | None:
     name = run["name"]
     # Continuous CI successes from every push would create noise and can
     # feed back through ledger-write commits; CI failures still get alerts.
-    if name == "Research Repository CI" and conclusion == "success" and run["event"] == "push":
+    if conclusion == "success" and (
+        (name == "Research Repository CI" and run["event"] == "push")
+        or (name == "Scheduled Synthetic Kaggle Telegram Monitor"
+            and run["event"] == "schedule")
+    ):
         return None
 
     if conclusion == "success":
