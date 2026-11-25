@@ -1,24 +1,24 @@
 {
-  "schema_version": 1,
-  "scope": "approved_synthetic_infrastructure_only",
-  "bootstrap_sent": false,
+  "bootstrap_sent": true,
+  "github_events": [],
   "kaggle_events": {
     "cpu-a": {
-      "last_event": "cpu-a:complete",
-      "delivery": "historical_suppressed"
+      "delivery": "historical_suppressed",
+      "last_event": "cpu-a:complete"
     },
     "cpu-b": {
-      "last_event": "cpu-b:complete",
-      "delivery": "historical_suppressed"
+      "delivery": "historical_suppressed",
+      "last_event": "cpu-b:complete"
     },
     "gpu-smoke": {
-      "last_event": "gpu-smoke:complete",
-      "delivery": "historical_suppressed"
+      "delivery": "historical_suppressed",
+      "last_event": "gpu-smoke:complete"
     },
     "gpu-tiny": {
-      "last_event": "gpu-tiny:complete",
-      "delivery": "historical_suppressed"
+      "delivery": "historical_suppressed",
+      "last_event": "gpu-tiny:complete"
     }
   },
-  "github_events": []
+  "schema_version": 1,
+  "scope": "approved_synthetic_infrastructure_only"
 }
