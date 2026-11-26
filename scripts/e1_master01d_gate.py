@@ -7,6 +7,8 @@ No network, file write, final freeze, or E1 launch is implemented here.
 """
 import re
 import json
+import hashlib
+from pathlib import Path
 from collections import Counter
 import e1_master01c_core as c
 import e1_master01d_review as d
@@ -65,16 +67,23 @@ def verify_signature(registry,role,payload,signature):
     except (InvalidSignature,ValueError):
         raise ValueError("INVALID_APPROVAL_SIGNATURE") from None
 
+def implementation_digest():
+    root=Path(__file__).resolve().parent
+    names=("e1_master01d_review.py","e1_master01d_gate.py","e1_master01d_session.py",
+           "e1_master01c_core.py","e1_master01c_private.py",
+           "e1_master01b_kaggle.py","e1_master01_validation_kaggle.py")
+    return c.digest({name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in names})
+
 def subject(*,environment_digest,session_digest,analysis_digest):
     require(all(hex_digest(x) for x in (environment_digest,session_digest,analysis_digest)),
             "SUBJECT_DIGEST")
     return {"checkpoint":d.CHECKPOINT,"mapping":d.MAPPING,"review_plan":d.plan_digest(),
-            "environment":environment_digest,"session":session_digest,
+            "environment":environment_digest,"session":session_digest,"implementation":implementation_digest(),
             "analysis_protocol":analysis_digest,"scope":SCOPE}
 
 def validate_subject(s):
     require(type(s) is dict and set(s)=={"checkpoint","mapping","review_plan","environment",
-            "session","analysis_protocol","scope"} and s==subject(
+            "session","analysis_protocol","scope","implementation"} and s==subject(
             environment_digest=s["environment"],session_digest=s["session"],
             analysis_digest=s["analysis_protocol"]),"APPROVAL_SUBJECT")
 
@@ -98,6 +107,10 @@ def pre_access(receipts,s,registry,trust_sha):
     enforce single-use session and obtain fresh authorization before data access.
     """
     verify_receipts(receipts,PRE_ACCESS,s,registry,trust_sha,phase="pre_access")
+    require(receipts["private_environment"]["payload"]["evidence_sha256"]==s["environment"] and
+            receipts["review_plan"]["payload"]["evidence_sha256"]==s["review_plan"] and
+            receipts["one_gpu_run"]["payload"]["evidence_sha256"]==s["session"],
+            "PRE_ACCESS_EVIDENCE_BINDING")
     return {"signed_pre_access_receipts_valid":True,
             "external_environment_and_single_use_enforcement_required":True,
             "medical_data_accessed":False,"gpu_submitted":False}
