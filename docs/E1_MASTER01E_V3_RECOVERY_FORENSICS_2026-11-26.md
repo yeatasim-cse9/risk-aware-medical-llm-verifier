@@ -18,12 +18,34 @@ original code, model manifest, prior evidence and failed notebook are unchanged.
 Synthetic tests compare the original and recovery run AST after removing the
 additional authorization gate and fixed markers.
 
-Not an executable Kaggle controller. Before any future submission, integrate a
-versioned wrapper that constructs the recorder on a saved descriptor BEFORE
-suppression, marks bootstrap/import, validation and output stages, catches
-exceptions inside the safe boundary and reports only recorder.failure(exc).
-Distinguish hard termination with last observed stage, not fabricated exceptions.
-Bind recovery code hashes, verify historical pins and model manifest, preserve
-duplicate guards, independently validate aggregates, run strict synthetic CI,
-read-only preflight and obtain fresh rights/quota/one-run authorization.
+## Versioned controller integration
+
+The separate recovery controller and manual-only GitHub workflow now package the
+unchanged pinned original 18 modules plus two recovery modules. The original
+model manifest digest is fixed at a1d1677a97ca4a7b6a57c0f0e369c54a53eca014bf5daf1791122d9d7642b1e8.
+The original scientific algorithm and historical artifacts remain unchanged.
+The recovery envelope binds the old aggregate, exact submission commit and
+recovery runner, diagnostics, controller and workflow file hashes; the inner
+aggregate still passes the original strict validator. The wrapper emits
+fixed-vocabulary stages through a saved descriptor while suppressing raw
+stdout/stderr through interpreter exit. A hard kill may leave no final failure
+marker. Failure codes classify exact allowlisted types and tokens only.
+
+Recovery notebook: yeatasimbillah/medical-llm-e1-master01e-v3-recovery-gpu-v1.
+It is distinct from the failed notebook and cannot overwrite it. The preflight
+requires the prior audit complete, old V3 notebook error, new slug absent,
+successful quota endpoint, immutable code and manifest pins.
+It does NOT certify remaining GPU hours. No dataset or weights are downloaded
+by preflight. Public model qualification checks published LFS hashes and small
+config bytes; actual large asset bytes are verified in a separately authorized
+runtime, not certified by CI.
+
+After merge and verification of all final CI jobs: open Actions > E1 MASTER 01E V3
+Recovery Private Pilot Controller > Run workflow > main; operation preflight;
+leave ALL three confirmation checkboxes false and expected_submission_commit
+blank. Require MASTER01EV3R_PREFLIGHT_OK_QUOTA_AMOUNT_NOT_CERTIFIED. Do not
+select submit or rerun a previous submission. Fresh dataset/model rights,
+quota and exactly-one-run explicit authorization are separately required for
+any future submit. No automatic recovery execution. No new inference results.
+
 No change to sampling, data, token limits, model or scientific claims is proposed.
