@@ -1,0 +1,46 @@
+name: Elite Redesign V3 Synthetic Baselines
+on:
+  pull_request:
+    paths:
+      - 'scripts/pirc_v*.py'
+      - 'scripts/pirc_calibration_prototype.py'
+      - 'tests/test_pirc_v3.py'
+      - 'docs/ELITE_REDESIGN_V3*'
+      - '.github/workflows/elite-redesign-v3.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/pirc_v*.py'
+      - 'scripts/pirc_calibration_prototype.py'
+      - 'tests/test_pirc_v3.py'
+      - 'docs/ELITE_REDESIGN_V3*'
+      - '.github/workflows/elite-redesign-v3.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Synthetic feature and comparator checks
+        run: python -m unittest discover -s tests -p 'test_pirc_v3.py' -v
+      - name: Hypothetical calibration sensitivity
+        run: |
+          PYTHONPATH=scripts python - <<'PY'
+          from pirc_v2_power import feasibility
+          import json
+          for k in (1,3,12):
+              for n in (300,500,900,1200):
+                  for r,i in ((.03,.01),(.07,.03)):
+                      print(json.dumps({"hypothetical":True,"true_release_error":r,
+                          "true_introduced_error":i,**feasibility(n,policies=k,
+                              true_release_error=r,true_introduced_error=i)},sort_keys=True))
+          PY
+      - name: Preserve E1 block
+        run: test ! -e configs/e1-approved-protocol.json
