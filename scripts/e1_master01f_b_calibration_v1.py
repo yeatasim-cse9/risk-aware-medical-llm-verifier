@@ -18,7 +18,7 @@ class Policy:
     thresholds:tuple=THRESHOLDS
 
 def freeze(model,*,alpha=.05,risk_cap=.10,coverage_floor=.50):
-    f.require(type(model) is f.Model,"MODEL")
+    f.require(type(model) is f.Model and model.trained_condition=="full","MODEL")
     f.validate_plan(model.plan)
     f.require(all(f.prob(x) and 0<x<1 for x in (alpha,risk_cap,coverage_floor)),"TARGETS")
     return Policy(model,alpha,risk_cap,coverage_floor)
@@ -42,6 +42,8 @@ def calibration(policy,plan,rows,*,neural=None):
     alpha,risk_cap,coverage_floor=policy.alpha,policy.risk_cap,policy.coverage_floor
     f.require(all(f.prob(x) and 0<x<1 for x in (alpha,risk_cap,coverage_floor)),"TARGETS")
     scores=f.score(policy.model,plan,rows,"calibration",condition="full",neural=neural)
+    expected={(g,p) for p,g,k in plan.members if k=="calibration"}
+    f.aligned_scores(scores,expected)
     chosen=representatives(plan)
     sample=[x[2] for x in scores if x[:2] in chosen]
     n=len(sample)
