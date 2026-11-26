@@ -1,0 +1,22 @@
+name: MASTER 01E V4 tokenizer compatibility synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01e_v4_*.py'
+      - 'tests/test_e1_master01e_v4.py'
+      - '.github/workflows/e1-master01e-v4-tokenizer-ci.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01e_v4.py -v
+      - run: python -m py_compile scripts/e1_master01e_v4_neural.py scripts/e1_master01e_v4_public_cpu_diagnostic.py
