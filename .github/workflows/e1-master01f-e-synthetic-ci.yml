@@ -1,0 +1,55 @@
+name: MASTER 01F-E Custody and Package Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01f_e_*.py'
+      - 'tests/test_e1_master01f_e_v1.py'
+      - '.github/workflows/e1-master01f-e-synthetic-ci.yml'
+      - 'docs/E1_MASTER01F_E_CUSTODY.md'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01f_e_*.py'
+      - 'tests/test_e1_master01f_e_v1.py'
+      - '.github/workflows/e1-master01f-e-synthetic-ci.yml'
+      - 'docs/E1_MASTER01F_E_CUSTODY.md'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01f_e_v1.py -v
+      - name: Independently verify immutable D package via Git archive and Git object bytes
+        run: |
+          git worktree add --detach /tmp/01fd 4ca7c69f7e00feea4d3d5dcd102c38f563abb64c
+          mkdir -p /tmp/01fd-archive build/01fe
+          git archive 4ca7c69f7e00feea4d3d5dcd102c38f563abb64c scripts | tar -x -C /tmp/01fd-archive
+          PYTHONPATH=scripts python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          import e1_master01f_e_package_v1 as p
+          root=Path("/tmp/01fd")
+          archive=Path("/tmp/01fd-archive")
+          expected={x.relative_to(archive).as_posix():hashlib.sha256(x.read_bytes()).hexdigest()
+                    for x in (archive/"scripts").rglob("*.py")}
+          actual=p.check_pilot(root,expected)
+          Path("build/01fe/d_source_hashes.json").write_text(json.dumps(actual,sort_keys=True,indent=2)+"\n")
+          print("MASTER01FE_D_PACKAGE_MODULES="+str(len(actual)))
+          print("MASTER01FE_D_PACKAGE_MANIFEST_SHA256="+hashlib.sha256(Path("build/01fe/d_source_hashes.json").read_bytes()).hexdigest())
+          print("MASTER01FE_D_PACKAGE_INTEGRITY_VERIFIED")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: master01fe-public-code-only-hashes
+          path: build/01fe/d_source_hashes.json
+          if-no-files-found: error
+          retention-days: 14
