@@ -38,9 +38,21 @@ def verify_registry(registry,expected_registry_sha256):
         require(type(row) is dict and set(row)=={"identity","public_key_hex"} and
                 type(row["identity"]) is str and bool(row["identity"].strip()) and
                 hex_digest(row["public_key_hex"]),"TRUST_ENTRY")
-    # Conservative separation: every role uses a distinct approved identity/key.
-    for field in ("identity","public_key_hex"):
-        require(len({x[field] for x in registry.values()})==len(ROLES),"ROLE_SEPARATION")
+    # One person may hold compatible roles, but keys and identities must map
+    # one-to-one. The same qualified panel may review both tasks if approved.
+    identity_to_key={};key_to_identity={}
+    for row in registry.values():
+        i,k=row["identity"],row["public_key_hex"]
+        require(identity_to_key.get(i,k)==k and key_to_identity.get(k,i)==i,"TRUST_IDENTITY_KEY")
+        identity_to_key[i]=k;key_to_identity[k]=i
+    for kind in ("semantic","clinical"):
+        panel=[registry[kind+s]["identity"] for s in ("_reviewer_1","_reviewer_2","_adjudicator")]
+        require(len(set(panel))==3,"ROLE_SEPARATION")
+    independent=registry["independent_scientist"]["identity"]
+    custodian=registry["data_custodian"]["identity"]
+    panels={registry[role]["identity"] for role in REVIEW_ROLES}
+    require(independent not in panels|{custodian,registry["scientific_lead"]["identity"]}
+            and custodian not in panels,"ROLE_SEPARATION")
 
 def verify_signature(registry,role,payload,signature):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
