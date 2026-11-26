@@ -1,0 +1,29 @@
+name: MASTER 01F-R Prospective Protocol Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01f_r_*.py'
+      - 'tests/test_e1_master01f_r_v1.py'
+      - 'docs/E1_MASTER01F_R_PROTOCOL.md'
+      - '.github/workflows/e1-master01f-r-synthetic-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01f_r_*.py'
+      - 'tests/test_e1_master01f_r_v1.py'
+      - 'docs/E1_MASTER01F_R_PROTOCOL.md'
+      - '.github/workflows/e1-master01f-r-synthetic-ci.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01f_r_v1.py -v
