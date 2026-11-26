@@ -91,6 +91,44 @@ jobs:
           if python build/master01ev4-code/runner.py > build/master01ev4-blocked.txt; then exit 1; fi
           grep -Fx 'MASTER01EV4_FAILED_CODE=AUTHORIZATION_REQUIRED' build/master01ev4-blocked.txt
           test "$(wc -l < build/master01ev4-blocked.txt)" -eq 1
+      - name: Independently inspect exact embedded package bytes and T4 metadata
+        run: |
+          PYTHONPATH=scripts python - <<'PY'
+          import ast, hashlib, json, subprocess
+          from pathlib import Path
+          import e1_master01e_v4_workflow as w
+          root=Path("build/master01ev4-code")
+          tree=ast.parse((root/"runner.py").read_text())
+          fields={n.targets[0].id:ast.literal_eval(n.value) for n in tree.body
+                  if isinstance(n,ast.Assign) and len(n.targets)==1
+                  and isinstance(n.targets[0],ast.Name)
+                  and n.targets[0].id in {"commit","bodies","hashes","recovery","checkpoint","manifest","md","authorized","report_name"}}
+          assert fields["commit"]==subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip()
+          assert fields["authorized"] is False and fields["report_name"]==w.REPORT
+          assert set(fields["bodies"])==set(w.validator.MODULES)|set(w.EXTRA)
+          assert set(fields["hashes"])==set(w.validator.MODULES)
+          assert set(fields["recovery"])==set(w.RECOVERY_FILES)
+          for name,body in fields["bodies"].items():
+              path="scripts/"+name+".py"
+              raw=subprocess.check_output(["git","show",fields["commit"]+":"+path])
+              assert raw==body
+              h=hashlib.sha256(raw).hexdigest()
+              assert h==(fields["recovery"][path] if name in w.EXTRA else fields["hashes"][name])
+          for path,h in fields["recovery"].items():
+              raw=subprocess.check_output(["git","show",fields["commit"]+":"+path])
+              assert hashlib.sha256(raw).hexdigest()==h
+          pin=json.loads(Path(w.old.MANIFEST).read_text())
+          assert fields["manifest"]==pin["manifest"] and fields["md"]==pin["manifest_sha256"]==w.MANIFEST_DIGEST
+          assert fields["checkpoint"]==json.loads(Path(w.old.CHECKPOINT).read_text())
+          meta=json.loads((root/"kernel-metadata.json").read_text())
+          assert meta=={"id":w.KERNEL,"title":w.KERNEL.split("/")[1],"code_file":"runner.py",
+              "language":"python","kernel_type":"script","is_private":True,"enable_gpu":True,
+              "enable_tpu":False,"enable_internet":True,"machine_shape":"NvidiaTeslaT4",
+              "dataset_sources":[],"competition_sources":[],"kernel_sources":[],"model_sources":[]}
+          print("MASTER01EV4_EMBEDDED_MODULES_VERIFIED="+str(len(fields["bodies"])))
+          print("MASTER01EV4_CODE_ONLY_PACKAGE_SHA256="+hashlib.sha256((root/"runner.py").read_bytes()).hexdigest())
+          print("MASTER01EV4_IMMUTABLE_PACKAGE_VERIFIED")
+          PY
       - name: Upload non-executable code-only package
         if: github.event_name == 'workflow_dispatch' && inputs.operation == 'prepare'
         uses: actions/upload-artifact@v4
