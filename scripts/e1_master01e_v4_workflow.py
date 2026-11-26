@@ -115,7 +115,7 @@ try:
         os.dup2(sink.fileno(),1);os.dup2(sink.fileno(),2)
     expected=dict(hashes)
     for name in ("e1_master01e_v4_diagnostics","e1_master01e_v4_private",
-                 "e1_master01e_v4_neural","e1_master01e_v4_budget"):
+                 "e1_master01e_v4_neural","e1_master01e_v4_budget","e1_master01e_v4_pilot"):
         expected[name]=recovery["scripts/"+name+".py"]
     if set(bodies)!=set(expected) or any(hashlib.sha256(bodies[k]).hexdigest()!=v for k,v in expected.items()):
         raise ValueError("PACKAGE_PIN")
