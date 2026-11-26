@@ -175,6 +175,16 @@ class Native(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"TRANSFER_SIZE"):
                 n.transfer(self.rev,entry,path)
 
+    def test_metadata_reason_is_allowlisted(self):
+        self.assertEqual(n.metadata_reason(ValueError("PUBLISHER_REVISION")),
+                         "PUBLISHER_REVISION")
+        self.assertEqual(n.metadata_reason(n.MetadataUnavailable("METADATA_UNAVAILABLE")),
+                         "METADATA_UNAVAILABLE")
+        self.assertEqual(n.metadata_reason(ValueError("private server message")),
+                         "UNCLASSIFIED_METADATA_ERROR")
+        self.assertEqual(n.metadata_reason(ValueError({"arbitrary": "data"})),
+                         "UNCLASSIFIED_METADATA_ERROR")
+
 
 if __name__=="__main__":
     unittest.main()

@@ -260,6 +260,16 @@ def read_json(path):
         return parse(handle.read(MAX_JSON + 1))
 
 
+def metadata_reason(exc):
+    # Emit only fixed locally defined codes, never remote bodies or URLs.
+    allowed = frozenset(["DUPLICATE_JSON_KEY","JSON_SIZE","NONFINITE_JSON","URL_SCOPE","METADATA_REDIRECT","METADATA_ENDPOINT","METADATA_HTTP","PAGINATED_INVENTORY","METADATA_UNAVAILABLE","PUBLISHER_ID_REVISION","PUBLIC_RELEASE_REQUIRED","DECLARED_LICENSE_DRIFT","TREE_SCHEMA","TREE_ENTRY","UNREVIEWED_DIRECTORY","UNREVIEWED_TREE_TYPE","UNREVIEWED_FILE","PUBLISHER_LFS_METADATA","PUBLISHER_REVISION","SHARD_SCHEMA","REVISION_REQUIRED","METADATA_PIN_REQUIRED","METADATA_PIN_MISMATCH","METADATA_SCOPE","SHARD_INVENTORY","SHARD_PATH","SHARD_IDENTITY","INCOMPLETE_SHARDS"])
+    if isinstance(exc, ValueError) and len(exc.args) == 1:
+        reason = exc.args[0]
+        if type(reason) is str and reason in allowed:
+            return reason
+    return "UNCLASSIFIED_METADATA_ERROR"
+
+
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="op", required=True)
@@ -279,9 +289,10 @@ def main():
             print("MASTER01FR2_PUBLIC_METADATA=" + canonical(data).decode("ascii"))
             print("MASTER01FR2_PUBLIC_METADATA_SHA256=" + p.digest(data))
             print("MASTER01FR2_PUBLIC_METADATA_OBSERVED_REVIEW_REQUIRED")
-        except Exception:
+        except Exception as exc:
             # No arbitrary HTTP body, URL, query tokens or server diagnostics.
             print("MASTER01FR2_PUBLIC_METADATA_BLOCKED")
+            print("MASTER01FR2_METADATA_REASON=" + metadata_reason(exc))
             raise SystemExit(2) from None
     else:
         try:
