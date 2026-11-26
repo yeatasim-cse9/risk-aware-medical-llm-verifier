@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source": "user_reported_kaggle_console_not_independently_fetched",
+  "date": "2026-11-26",
+  "cpu": {
+    "source_commit": "b6400b297d0d6b524fbd9663221e7d4fa9ab49dc",
+    "old_path_missing_attribute": "build_inputs_with_special_tokens",
+    "old_path_failure_type": "AttributeError",
+    "synthetic_model_smoke_passed": true,
+    "diagnostic": "PASS_RUNTIME_DIFFERS",
+    "versions": {
+      "huggingface_hub": "1.33.0",
+      "numpy": "2.1.3",
+      "pyarrow": "23.0.1",
+      "torch": "2.11.0+cpu",
+      "transformers": "5.20.2"
+    },
+    "medical_data_used": false
+  },
+  "gpu": {
+    "source_commit": "4e579148961df905721b2601200a73a9c8e83de5",
+    "stages": [
+      "WINDOW_BOUNDARY",
+      "FULL_FORWARD",
+      "REMOVED_FORWARD",
+      "PERMUTED_FORWARD",
+      "REPEAT_FULL"
+    ],
+    "synthetic_model_smoke_passed": true,
+    "diagnostic": "EXACT_RUNTIME_PASS",
+    "peak_allocated_bytes": 1149010944,
+    "peak_reserved_bytes": 1226833920,
+    "medical_data_used": false,
+    "bootstrap_complete": true,
+    "accelerator_selection_reported": "GPU T4 x2",
+    "device_name_line_provided": false,
+    "version_lines_provided": false
+  },
+  "model_manifest_sha256": "a1d1677a97ca4a7b6a57c0f0e369c54a53eca014bf5daf1791122d9d7642b1e8",
+  "neural_blob_sha1": "4310fddde62f4ff5ac73d239322f8ecfe3326996",
+  "scientific_result": false
+}
