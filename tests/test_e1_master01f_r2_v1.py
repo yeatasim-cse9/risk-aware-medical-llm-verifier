@@ -216,6 +216,18 @@ class Native(unittest.TestCase):
         self.assertEqual(len(plan["train_files"]),5)
         self.assertFalse(plan["execution_authorized"])
 
+    def test_documented_gcp_cdn_redirect(self):
+        r=n.BoundedTransferRedirect()
+        req=n.Request(n.resolve_url(self.rev,next(x for x in self.meta["shards"] if "/train-" in x["path"])))
+        url="https://us.gcp.cdn.hf.co/blob?synthetic=1"
+        redirected=r.redirect_request(req,None,302,"",{},url)
+        self.assertEqual(redirected.full_url,url)
+        for invalid in ("https://us.gcp.cdn.hf.co.example.invalid/blob",
+                        "http://us.gcp.cdn.hf.co/blob",
+                        "https://us.gcp.cdn.hf.co:444/blob"):
+            with self.assertRaises(ValueError):
+                r.redirect_request(req,None,302,"",{},invalid)
+
 
 if __name__=="__main__":
     unittest.main()
