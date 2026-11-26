@@ -1,0 +1,64 @@
+name: MASTER 01E V4 Read-only Result Recovery
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01e_v4_readonly_recovery.py'
+      - 'tests/test_e1_master01e_v4_readonly_recovery.py'
+      - '.github/workflows/e1-master01e-v4-readonly-recovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01e_v4_readonly_recovery.py'
+      - 'tests/test_e1_master01e_v4_readonly_recovery.py'
+      - '.github/workflows/e1-master01e-v4-readonly-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: master01ev4-readonly-result-recovery
+  cancel-in-progress: false
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p test_e1_master01e_v4_readonly_recovery.py -v
+      - run: python -m py_compile scripts/e1_master01e_v4_readonly_recovery.py
+  recover-existing:
+    needs: synthetic
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 03b691dde1081d925bf73b705a91b1557a6ebbf7
+          path: original-producer
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install kaggle==2.2.5 six==1.17.0
+      - name: Read existing output and strictly verify original producer schema
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/e1_master01e_v4_readonly_recovery.py --producer original-producer --out build/master01ev4-readonly
+      - uses: actions/upload-artifact@v4
+        with:
+          name: master01ev4-readonly-verified-original
+          path: |
+            build/master01ev4-readonly/master01ev4_private_aggregate.json
+            build/master01ev4-readonly/verification_receipt.json
+          if-no-files-found: error
+          retention-days: 14
