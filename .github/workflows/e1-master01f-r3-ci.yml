@@ -1,0 +1,39 @@
+name: MASTER 01F-R3 Cohort Audit CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01f_r3_*.py'
+      - 'tests/test_e1_master01f_r3_v1.py'
+      - 'docs/E1_MASTER01F_R3_AUDIT.md'
+      - '.github/workflows/e1-master01f-r3-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01f_r3_*.py'
+      - 'tests/test_e1_master01f_r3_v1.py'
+      - 'docs/E1_MASTER01F_R3_AUDIT.md'
+      - '.github/workflows/e1-master01f-r3-ci.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01f_r3_v1.py -v
+  public_readme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python scripts/e1_master01f_r3_readme_v1.py
