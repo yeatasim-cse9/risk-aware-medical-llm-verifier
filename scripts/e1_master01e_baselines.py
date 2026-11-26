@@ -24,7 +24,9 @@ def lexical(q,a,c):
             len(a&q)/max(1,len(a)),len(a&c)/max(1,len(a|c))]
 def features(x,mode):
     require(type(x) is dict and set(x)=={"question","answer","context"} and mode in MODES,"INPUT_SCHEMA")
-    q,a,c=map(words,(x["question"],x["answer"],x["context"]))
+    q,a=map(words,(x["question"],x["answer"]))
+    require(type(x["context"]) is str,"CONTEXT")
+    c=words(x["context"]) if x["context"].strip() else []
     length=[math.log1p(len(a))]
     style=length+[math.log1p(len(x["answer"])),len(set(a))/len(a),
         sum(t.isdigit() for t in a)/len(a),sum(t in {"no","not","never","none"} for t in a)/len(a),
@@ -94,14 +96,16 @@ def context_permutation(pairs,partition,seed=20261126):
     shift=next((s for s in range(1,n) if all(a[i]["source_group"]!=a[(i+s)%n]["source_group"] for i in range(n))),None)
     require(shift is not None,"NO_CROSS_SOURCE_PERMUTATION")
     return [{**p,"context":a[(i+shift)%n]["context"]} for i,p in enumerate(a)]
-def score_pairs(model,pairs,partition):
+def score_pairs(model,pairs,partition,*,remove_evidence=False):
     validate_pairs(pairs,partition)
-    return [(p["source_group"],tuple(predict(model,x) for x,y in rows([p]))) for p in pairs]
+    require(type(remove_evidence) is bool,"REMOVAL_FLAG")
+    return [(p["source_group"],p["parent"],tuple(predict(model,{**x,"context":""} if remove_evidence else x)
+        for x,y in rows([p]))) for p in pairs]
 def metrics(scored):
     """AP positive hallucinated role. Tie-grouped AP, paired ranking and Brier."""
     require(bool(scored),"EMPTY_SCORES")
     xy=[];rank=0
-    for group,(gt,ha) in scored:
+    for group,parent,(gt,ha) in scored:
         require(all(type(x) in (int,float) and math.isfinite(x) and 0<=x<=1 for x in (gt,ha)),"SCORE")
         xy.extend([(gt,0),(ha,1)]);rank+=int(ha>gt)+.5*int(ha==gt)
     xy.sort(reverse=True);i=tp=0;ap=0.;n=len(scored)
@@ -119,8 +123,9 @@ def paired_bootstrap(proposed,baseline,*,replicates=1000,seed=20261126):
     require(type(replicates) is int and 100<=replicates<=10000 and len(proposed)==len(baseline)>0,"BOOTSTRAP_INPUT")
     groups={}
     for a,b in zip(proposed,baseline):
-        require(a[0]==b[0],"GROUP_ALIGNMENT")
+        require(a[:2]==b[:2],"PARENT_GROUP_ALIGNMENT")
         groups.setdefault(a[0],[]).append((a,b))
+    require(len({a[1] for a in proposed})==len(proposed),"DUPLICATE_PARENT")
     keys=sorted(groups);require(len(keys)>=2,"INSUFFICIENT_GROUPS")
     rng=random.Random(seed);diff=[]
     for _ in range(replicates):
