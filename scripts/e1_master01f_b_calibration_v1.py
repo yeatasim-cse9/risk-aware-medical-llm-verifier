@@ -12,12 +12,16 @@ THRESHOLDS=(0.05,0.10,0.20,0.30,0.40,0.50)
 @dataclass(frozen=True)
 class Policy:
     model:f.Model
+    alpha:float
+    risk_cap:float
+    coverage_floor:float
     thresholds:tuple=THRESHOLDS
 
-def freeze(model):
+def freeze(model,*,alpha=.05,risk_cap=.10,coverage_floor=.50):
     f.require(type(model) is f.Model,"MODEL")
     f.validate_plan(model.plan)
-    return Policy(model)
+    f.require(all(f.prob(x) and 0<x<1 for x in (alpha,risk_cap,coverage_floor)),"TARGETS")
+    return Policy(model,alpha,risk_cap,coverage_floor)
 
 def representatives(plan):
     f.validate_plan(plan)
@@ -26,7 +30,7 @@ def representatives(plan):
         if k=="calibration":by.setdefault(g,[]).append(p)
     return {(g,min(ps,key=lambda p:(f.key(p),p))) for g,ps in by.items()}
 
-def calibration(policy,plan,rows,*,neural=None,alpha=.05,risk_cap=.10,coverage_floor=.50):
+def calibration(policy,plan,rows,*,neural=None):
     """Scores computed with a previously frozen train-only head; no fitting here.
     Fixed family, two one-sided bounds per threshold with Bonferroni.
     Conditional binomial inference assumes iid source-group representatives,
@@ -35,6 +39,7 @@ def calibration(policy,plan,rows,*,neural=None,alpha=.05,risk_cap=.10,coverage_f
     """
     f.require(type(policy) is Policy and policy.model.plan==plan
               and policy.thresholds==THRESHOLDS,"FROZEN_POLICY")
+    alpha,risk_cap,coverage_floor=policy.alpha,policy.risk_cap,policy.coverage_floor
     f.require(all(f.prob(x) and 0<x<1 for x in (alpha,risk_cap,coverage_floor)),"TARGETS")
     scores=f.score(policy.model,plan,rows,"calibration",condition="full",neural=neural)
     chosen=representatives(plan)
