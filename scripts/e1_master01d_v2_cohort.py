@@ -6,8 +6,8 @@ No cross-task pooling, test reassignment, or claim of iid source groups.
 """
 from collections import Counter,defaultdict
 import re
-from e1_master01d_v2_integrity import normalize,require
-from e1_master01c_core import digest
+from e1_master01d_v2_integrity import normalize,require,ORIGINAL,verify_checkpoint
+from e1_master01c_core import digest,validate,PAIRS,SPLITS
 from pirc_v2_power import feasibility
 
 PARTITIONS=("train","tune","calibration","test")
@@ -47,6 +47,8 @@ def plan(rows,*,dataset,release,task,near_links=(),seed=SEED):
         require(type(x["sources"]) is tuple and len(set(x["sources"]))==len(x["sources"])
                 and all(type(v) is str and re.fullmatch(r"[a-z][a-z0-9_-]*:[^\s:]+",v)
                         for v in x["sources"]),"SOURCE_ALIAS_SCHEMA")
+        require(all(not v.startswith("pmid:") or re.fullmatch(r"pmid:[1-9][0-9]*",v)
+                    for v in x["sources"]),"PMID_CANONICAL")
         require(type(x["context"]) is str and
                 (not x["evidence_available"] or bool(x["context"].strip())) and
                 (not x["provenance_known"] or bool(x["sources"])),"MISSING_PROVENANCE")
@@ -116,6 +118,27 @@ def plan(rows,*,dataset,release,task,near_links=(),seed=SEED):
              "complete_semantic_screen_verified":False,"rights_verified":False,
              "final_split_frozen":False,"execution_authorized":False}
     return mapping,summary
+
+def protected_from_01c(report,records,official_test_bytes):
+    """Private protected-covariate adapter. Input reconstruction must be
+    authenticated externally; checks do not prove original text membership.
+    All 01C originals (including quarantined) plus holdout, not the full
+    universe of previously excluded datasets.
+    """
+    from e1_master01d_v2_integrity import verify_holdout_identity
+    verify_checkpoint(report)
+    validate(records,{p:set() for p in PAIRS})
+    require({s:len(records[s]) for s in SPLITS}==ORIGINAL,"PROTECTED_COUNTS")
+    verify_holdout_identity(records,official_test_bytes)
+    result=[]
+    for s in SPLITS:
+        for r in records[s]:
+            require(re.fullmatch(r"[1-9][0-9]*",r["source"]) is not None,"PROTECTED_PMID")
+            result.append({"dataset":"prior01c","release":"master01c","id":str(r["key"][0])+":"+str(r["key"][1]),
+              "task":"protected_covariates","native_split":"protected","sources":("pmid:"+r["source"],),
+              "question":r["question"],"context":r["context"],"evidence_available":True,
+              "reference_available":False,"provenance_known":True})
+    return result
 
 def prospective_power(n):
     """Only hypothetical rates, not pilot measurements. 2000 is a computational
