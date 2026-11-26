@@ -1,0 +1,41 @@
+{
+  "repository": "LAMA-WeST/medhal-lf_qafil_bal",
+  "revision": "3500188ec0691c1d83e2738592ec01a16e7dbcb5",
+  "shards": [
+    {
+      "path": "data/test-00000-of-00001.parquet",
+      "sha256": "0ccf6131458ffc5a26232d183352ef5457c8f60f91b68b5630537ec5eab346d9",
+      "size": 139621880
+    },
+    {
+      "path": "data/train-00000-of-00005.parquet",
+      "sha256": "62d5c549c3ab181c89611425df545a2c2d5650f2eb28bf083d4bac9569556bbf",
+      "size": 223691288
+    },
+    {
+      "path": "data/train-00001-of-00005.parquet",
+      "sha256": "b66c72acabe7c43d95a7794403a5bd041bd3d1f3bea4663994217746f5b4167f",
+      "size": 223970255
+    },
+    {
+      "path": "data/train-00002-of-00005.parquet",
+      "sha256": "9af043e566a9db19fb97f03dc84e7e6d4e314ed46f3c6a5e359264a590f678c2",
+      "size": 224249111
+    },
+    {
+      "path": "data/train-00003-of-00005.parquet",
+      "sha256": "ee089e9f6c140a899d8fb7017af64b9c4ff6a187a56cefdd1c93616b379727ec",
+      "size": 223779657
+    },
+    {
+      "path": "data/train-00004-of-00005.parquet",
+      "sha256": "0d8d832e2a225f27777de136e28f740a7c30943775940a643bbccbe1920f6002",
+      "size": 224293052
+    },
+    {
+      "path": "data/val-00000-of-00001.parquet",
+      "sha256": "4b60b0c58ebbf0e484339c9fff98c65f68913b2a49d67c5c9dadcf67f0f12a6d",
+      "size": 123332025
+    }
+  ]
+}

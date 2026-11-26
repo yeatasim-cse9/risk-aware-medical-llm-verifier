@@ -94,3 +94,14 @@ row/schema/source/rights audit and grouping are needed before model use.
 No raw rows, file paths containing identifiers or private results in public
 GitHub artifacts. Preserve historical evidence, no GPU runs, no test-answer
 access, no calibration or scientific claims in this phase.
+
+## Observed immutable public metadata (not approval)
+
+The successful strict observation at run 45819880190 / job 139909084221
+recorded revision 3500188ec0691c1d83e2738592ec01a16e7dbcb5 and canonical digest
+`1eb70ba0c1c1d06549d37c41596e5bdd19d0f2c1953493ebc9de2bb26c36f17a`. The exact normalized publisher inventory is archived in
+`configs/master01fr2-medhal-public-metadata.json` for reproducible review.
+These are publisher metadata hashes, not independently computed dataset
+byte hashes; neither the archived manifest nor a regression test is a
+supervisor authorization. Revalidate actual metadata and rights before
+any acquisition. A changed release requires prospective review.

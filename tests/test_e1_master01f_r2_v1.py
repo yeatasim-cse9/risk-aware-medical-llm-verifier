@@ -206,6 +206,16 @@ class Native(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"SHARD_PATH"):
             n.native_plan(modified,self.rev,n.p.digest(modified))
 
+    def test_observed_public_manifest_pin(self):
+        import json
+        path=Path(__file__).resolve().parents[1]/"configs"/"master01fr2-medhal-public-metadata.json"
+        metadata=json.loads(path.read_text(encoding="utf-8"))
+        expected="1eb70ba0c1c1d06549d37c41596e5bdd19d0f2c1953493ebc9de2bb26c36f17a"
+        self.assertEqual(n.p.digest(metadata),expected)
+        plan=n.native_plan(metadata,"3500188ec0691c1d83e2738592ec01a16e7dbcb5",expected)
+        self.assertEqual(len(plan["train_files"]),5)
+        self.assertFalse(plan["execution_authorized"])
+
 
 if __name__=="__main__":
     unittest.main()
