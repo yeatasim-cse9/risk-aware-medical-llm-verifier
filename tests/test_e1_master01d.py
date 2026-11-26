@@ -11,6 +11,8 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
 import e1_master01c_core as c
 import e1_master01d_review as d
 import e1_master01d_gate as g
+import e1_master01d_session as session
+import os
 from test_e1_master01c_core import fixture
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -58,6 +60,24 @@ class TestMaster01D(unittest.TestCase):
         self.assertGreater(d.interval(7177253,100,0)[1],0)
         with self.assertRaisesRegex(ValueError,"INTERVAL_INPUT"):
             d.interval(5,6,1)
+
+    def test_prior_source_pins(self):
+        session.verify_prior_source()
+
+    @unittest.skipIf(Ed25519PrivateKey is None, "Dedicated 01D CI installs cryptography")
+    def test_private_session_fails_before_data_access(self):
+        import hashlib
+        keys,registry,sha=trust();nonce=b'x'*32
+        s=g.subject(environment_digest='a'*64,session_digest=hashlib.sha256(nonce).hexdigest(),analysis_digest='c'*64)
+        r=receipts(keys,g.PRE_ACCESS,s,'pre_access',{'private_environment':s['environment'],
+            'review_plan':s['review_plan'],'one_gpu_run':s['session']})
+        with patch.dict(os.environ,{},clear=True),patch.object(session.p,'prepare_private') as run:
+            with self.assertRaisesRegex(ValueError,'PRIVATE_ENVIRONMENT_REQUIRED'):
+                session.prepare_authorized_session(Path('unused'),nonce,r,s,registry,sha)
+            run.assert_not_called()
+            with self.assertRaisesRegex(ValueError,'SESSION_NONCE_BINDING'):
+                session.prepare_authorized_session(Path('unused'),b'y'*32,r,s,registry,sha)
+            run.assert_not_called()
 
     def test_weighted_census(self):
         x=d.stratified_binary([(2,2,1),(8,8,2)])
