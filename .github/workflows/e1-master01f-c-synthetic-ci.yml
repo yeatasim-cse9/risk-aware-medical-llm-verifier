@@ -1,0 +1,30 @@
+name: MASTER 01F-C Protocol Qualification Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01f_c_*.py'
+      - 'tests/test_e1_master01f_c_v1.py'
+      - '.github/workflows/e1-master01f-c-synthetic-ci.yml'
+      - 'docs/E1_MASTER01F_C_PROTOCOL.md'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01f_c_*.py'
+      - 'tests/test_e1_master01f_c_v1.py'
+      - '.github/workflows/e1-master01f-c-synthetic-ci.yml'
+      - 'docs/E1_MASTER01F_C_PROTOCOL.md'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01f_c_v1.py -v
+      - run: python -m py_compile scripts/e1_master01f_c_qualification_v1.py scripts/e1_master01f_c_planning_v1.py
