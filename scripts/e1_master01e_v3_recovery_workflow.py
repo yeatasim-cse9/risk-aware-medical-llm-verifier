@@ -45,7 +45,8 @@ def source(commit=None):
     require(md==MANIFEST_DIGEST,"MODEL_MANIFEST_DRIFT")
     for k,body in bodies.items():
         require(body==git_bytes(ORIGINAL,"scripts/"+k+".py"),"ORIGINAL_MODULE_DRIFT")
-    for path in (old.CHECKPOINT,old.ARCHIVE,old.MANIFEST,"scripts/kaggle_status.py"):
+    for path in (old.CHECKPOINT,old.ARCHIVE,old.MANIFEST,"scripts/kaggle_status.py",
+                 "scripts/e1_master01e_v3_workflow.py"):
         require(git_bytes(commit,path)==git_bytes(ORIGINAL,path)
                 and (ROOT/path).read_bytes()==git_bytes(commit,path),"ORIGINAL_EVIDENCE_DRIFT")
     recovery={}
@@ -242,8 +243,16 @@ def main():
         elif a.op=="verify":verify(a.out,a.expected_commit)
         elif a.op=="monitor":monitor(a.out,a.expected_commit)
         elif a.op=="notify":telegram(a.event)
-    except Exception:
-        print("MASTER01EV3R_CONTROLLER_FAILED="+a.op,flush=True)
+    except Exception as exc:
+        codes={"AUTHORIZATION_REQUIRED","SOURCE_COMMIT","SOURCE_NOT_IN_HISTORY",
+               "ORIGINAL_MODULE_DRIFT","ORIGINAL_EVIDENCE_DRIFT","RECOVERY_SOURCE_DRIFT",
+               "MODEL_MANIFEST_DRIFT","QUOTA_ENDPOINT_UNAVAILABLE","PREVIOUS_RUN_NOT_COMPLETE",
+               "FAILED_RUN_NOT_PRESERVED","RECOVERY_DUPLICATE_BLOCKED","REMOTE_NOT_COMPLETE",
+               "EXPECTED_SUBMISSION_COMMIT_REQUIRED","REMOTE_AGGREGATE_DOWNLOAD_FAILED",
+               "REPORT_FILE_POLICY","RECOVERY_SCHEMA","RECOVERY_INTEGRITY",
+               "REMOTE_TERMINAL_FAILURE","MONITOR_TIMEOUT_NO_RESUBMIT"}
+        code=exc.args[0] if type(exc) is ValueError and len(exc.args)==1 and type(exc.args[0]) is str and exc.args[0] in codes else "SAFE_FAILURE_REQUIRES_REVIEW"
+        print("MASTER01EV3R_CONTROLLER_FAILED="+a.op+" | "+code,flush=True)
         sys.exit(1)
 
 if __name__=="__main__":main()
