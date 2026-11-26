@@ -1,0 +1,20 @@
+name: MASTER 01E V3 recovery synthetic diagnostics
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01e_v3_recovery_*.py'
+      - 'tests/test_e1_master01e_v3_recovery.py'
+      - '.github/workflows/e1-master01e-v3-recovery-ci.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01e_v3_recovery.py -v
+      - run: python -m py_compile scripts/e1_master01e_v3_recovery_private.py scripts/e1_master01e_v3_recovery_diagnostics.py
