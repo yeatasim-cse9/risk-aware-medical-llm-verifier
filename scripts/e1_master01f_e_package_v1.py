@@ -36,15 +36,16 @@ def preflight(root,expected_hashes,bundle,assets,manifest_pin):
     """D checkout must be separately pinned; no imports until verified.
     Child process executes read-only preflight, never run.
     """
+    root=root.resolve();bundle=bundle.resolve();assets=assets.resolve()
     check_pilot(root,expected_hashes)
-    require(re.fullmatch(r"[0-9a-f]{64}",manifest_pin) is not None,"MANIFEST_PIN")
+    require(type(manifest_pin) is str and re.fullmatch(r"[0-9a-f]{64}",manifest_pin) is not None,"MANIFEST_PIN")
     env={k:v for k,v in os.environ.items() if k not in
          ("PYTHONPATH","PYTHONHOME","MASTER01FD_AUTHORIZED_ONE_GPU_PILOT")}
     env.update(MASTER01FD_PRIVATE_ENVIRONMENT="YES",MASTER01FD_SOURCE_COMMIT=D_COMMIT,
                MASTER01FD_CUSTODIAN_MANIFEST_SHA256=manifest_pin,
                CUDA_VISIBLE_DEVICES="",HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1")
     p=subprocess.run([sys.executable,"-I","-B","-c",
-       "import sys,runpy;sys.path.insert(0,sys.argv.pop(1));runpy.run_path(sys.argv[0],run_name='__main__')",
+       "import sys,runpy;sys.path.insert(0,sys.argv[1]);sys.argv=sys.argv[2:];runpy.run_path(sys.argv[0],run_name='__main__')",
        str(root/"scripts"),str(root/"scripts/e1_master01f_d_controller_v1.py"),
        "preflight","--bundle",str(bundle),"--assets",str(assets)],cwd=root,env=env,
        capture_output=True,timeout=300)
