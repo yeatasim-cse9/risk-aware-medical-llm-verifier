@@ -1,6 +1,6 @@
 # MASTER 01F-R2 — native split metadata and private CPU transfer gate
 
-Status: source candidate and infrastructure only. Supervisor/rights approval,
+Status: source candidate and infrastructure only. The metadata probe observed\nrevision 3500188ec0691c1d83e2738592ec01a16e7dbcb5 with five train, one val,\nand one test Parquet object (public CI run 45819728567). This observation\nwas initially rejected solely by the old filename allowlist. Supervisor/rights approval,
 actual source-file bytes, cross-source group separation, row audit and
 scientific execution remain unapproved.
 
@@ -44,7 +44,7 @@ Public metadata only: GET fixed /api/datasets/{candidate}/revision/main then
 GET /api/datasets/{candidate}/tree/{exact SHA}?recursive=true. No viewer,
 rows API, dataset loading, file download, credentials or redirect. Require
 public ungated candidate, declared Apache-2.0, complete conventional native
-split filenames and LFS content hash/size metadata. Reject unknown files,
+split filenames and LFS content hash/size metadata. The observed physical\nvalidation spelling is val (not validation). Only this exact physical convention\nis accepted; internal logical aliasing never changes the reviewed metadata\npin or any download path. Reject unknown files,
 paths, pagination and ambiguous/aliased shards. If layout changes, review
 and version before allowing. Only normalized public metadata and digest
 may appear in CI logs. The probe may fail due to network/API/schema drift;

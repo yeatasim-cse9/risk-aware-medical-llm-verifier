@@ -97,6 +97,34 @@ def metadata_json(url):
     return parse(raw)
 
 
+NATIVE_PATH = re.compile(r"data/(train|val|test)-([0-9]{5})-of-([0-9]{5})[.]parquet")
+
+
+def native_plan(metadata, revision, metadata_pin):
+    """Validate exact physical val spelling; canonical alias is internal only.
+    The externally reviewed pin binds original physical paths, not aliases.
+    Never form a resolve URL from the alias.
+    """
+    require(type(metadata) is dict and set(metadata) == {"repository", "revision", "shards"},
+            "METADATA_SCOPE")
+    require(type(metadata_pin) is str and p.SHA.fullmatch(metadata_pin)
+            and p.digest(metadata) == metadata_pin, "METADATA_PIN_MISMATCH")
+    require(type(metadata["shards"]) is list, "SHARD_INVENTORY")
+    mapped = []
+    for entry in metadata["shards"]:
+        require(type(entry) is dict and set(entry) == {"path", "sha256", "size"}
+                and type(entry["path"]) is str and NATIVE_PATH.fullmatch(entry["path"]),
+                "SHARD_PATH")
+        row = dict(entry)
+        if row["path"].startswith("data/val-"):
+            row["path"] = row["path"].replace("data/val-", "data/validation-", 1)
+        mapped.append(row)
+    internal = {**metadata, "shards": mapped}
+    plan = p.train_plan(internal, revision, p.digest(internal))
+    plan["metadata_sha256"] = metadata_pin
+    return plan
+
+
 def normalize(info, tree):
     """Only extract public file inventory, not rows; unsupported layout fails."""
     require(type(info) is dict and info.get("id") == p.CANDIDATE
@@ -120,7 +148,7 @@ def normalize(info, tree):
         require(x.get("type") == "file", "UNREVIEWED_TREE_TYPE")
         if path in {"README.md", ".gitattributes", "LICENSE", "LICENSE.txt", "NOTICE"}:
             continue
-        require(p.PATH.fullmatch(path), "UNREVIEWED_FILE")
+        require(NATIVE_PATH.fullmatch(path), "UNREVIEWED_FILE")
         lfs = x.get("lfs")
         require(type(lfs) is dict and type(lfs.get("oid")) is str
                 and p.SHA.fullmatch(lfs["oid"]) and type(lfs.get("size")) is int
@@ -129,7 +157,7 @@ def normalize(info, tree):
         shards.append({"path": path, "sha256": lfs["oid"], "size": lfs["size"]})
     metadata = {"repository": p.CANDIDATE, "revision": info["sha"],
                 "shards": sorted(shards, key=lambda x: x["path"])}
-    p.train_plan(metadata, info["sha"], p.digest(metadata))
+    native_plan(metadata, info["sha"], p.digest(metadata))
     return metadata
 
 
@@ -188,7 +216,7 @@ def approved_plan(metadata, revision, metadata_pin, approval, approval_pin):
     Whole-shard rights are required BEFORE transfer, not only rights of rows
     later selected. No bypass for a single source selected after downloading.
     """
-    plan = p.train_plan(metadata, revision, metadata_pin)
+    plan = native_plan(metadata, revision, metadata_pin)
     require(type(approval_pin) is str and p.SHA.fullmatch(approval_pin),
             "EXTERNAL_APPROVAL_PIN_REQUIRED")
     require(type(approval) is dict and set(approval) == APPROVAL

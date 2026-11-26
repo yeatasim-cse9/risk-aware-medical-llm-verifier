@@ -20,7 +20,7 @@ class Native(unittest.TestCase):
         self.raw = b"invented train bytes"
         self.tree = [{"type":"directory","path":"data"},
                      {"type":"file","path":"README.md","size":5}]
-        for split, raw in (("train",self.raw),("validation",b"v"),("test",b"t")):
+        for split, raw in (("train",self.raw),("val",b"v"),("test",b"t")):
             self.tree.append({"type":"file","path":f"data/{split}-00000-of-00001.parquet",
                               "size":len(raw), "lfs":{"oid":hashlib.sha256(raw).hexdigest(),
                                                     "size":len(raw)}})
@@ -194,6 +194,17 @@ class Native(unittest.TestCase):
         self.assertTrue(n.observe_inventory(self.info, self.tree)["inventory_truncated"])
         self.assertFalse(any(x["path"] == "../bad" for x in
                              n.observe_inventory(self.info, self.tree)["observed_entries"]))
+
+    def test_physical_val_alias_and_review_pin(self):
+        self.assertTrue(any(x["path"].startswith("data/val-") for x in self.meta["shards"]))
+        plan=n.native_plan(self.meta,self.rev,self.pin)
+        self.assertEqual(plan["metadata_sha256"],self.pin)
+        self.assertEqual([x["path"] for x in plan["train_files"]],
+                         ["data/train-00000-of-00001.parquet"])
+        modified={**self.meta,"shards":[{**x,"path":x["path"].replace(
+            "data/val-","data/validation-")} for x in self.meta["shards"]]}
+        with self.assertRaisesRegex(ValueError,"SHARD_PATH"):
+            n.native_plan(modified,self.rev,n.p.digest(modified))
 
 
 if __name__=="__main__":
