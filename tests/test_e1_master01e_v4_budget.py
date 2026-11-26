@@ -9,6 +9,9 @@ sys.path.insert(0,str(S))
 import e1_master01e_v4_budget as a
 import e1_master01e_v4_neural as n
 from test_e1_master01e_v4 import ModernTokenizer,Model
+import e1_master01e_v4_pilot as staged
+import e1_master01e_v2_pilot as original
+from test_e1_master01e_v2 import FakeEngine,pair
 
 def rows(split,start):
     return [{"parent":str(i),"source_group":str(i),"partition":split,
@@ -79,4 +82,39 @@ class Audit(unittest.TestCase):
         self.assertLess(src.index("GPU_SMOKE_REPEAT"),src.index("HISTORICAL_RECONSTRUCTION"))
         self.assertIn('result["inference_budget"]==expected',src)
 
+class StagedPilot(unittest.TestCase):
+    def test_algorithm_ast_equivalence(self):
+        def run(path):
+            return next(x for x in ast.parse(path.read_text()).body
+                        if isinstance(x,ast.FunctionDef) and x.name=="run")
+        old=run(S/"e1_master01e_v2_pilot.py")
+        new=run(S/"e1_master01e_v4_pilot.py")
+        new.args.kwonlyargs=new.args.kwonlyargs[:1]
+        new.args.kw_defaults=new.args.kw_defaults[:1]
+        new.body=[x for x in new.body if not (
+            isinstance(x,ast.Expr) and isinstance(x.value,ast.Call)
+            and isinstance(x.value.func,ast.Name) and
+            (x.value.func.id=="mark" or (x.value.func.id=="require"
+             and ast.unparse(x.value.args[-1])=="'AUDIT_ACTUAL_BUDGET_MISMATCH'")))]
+        self.assertEqual(ast.dump(old),ast.dump(new))
+
+    def test_synthetic_end_to_end_same_metrics(self):
+        tr=[pair(i,"train") for i in range(4)]
+        dv=[pair(i,"dev") for i in range(4,8)]
+        with patch.object(original,"LIMITS",{"train":4,"dev":4}),patch.object(original,"validate_private_inputs"),patch.object(staged,"validate_private_inputs"):
+            old=original.run(FakeEngine(),tr,dv,authorized=True)
+            marks=[]
+            new=staged.run(FakeEngine(),tr,dv,authorized=True,
+                           expected=old["inference_budget"],mark=marks.append)
+            self.assertEqual(marks,["PILOT_TRAIN_INFERENCE","PILOT_DEV_INFERENCE",
+                "PILOT_HEAD_FIT","PILOT_BASELINES","PILOT_METRICS","PILOT_BOOTSTRAP"])
+            old.pop("elapsed_seconds");new.pop("elapsed_seconds")
+            self.assertEqual(old,new)
+            with patch.object(staged,"collect",wraps=original.collect) as collect:
+                with self.assertRaisesRegex(ValueError,"AUDIT_ACTUAL_BUDGET_MISMATCH"):
+                    staged.run(FakeEngine(),tr,dv,authorized=True,
+                               expected={"train":{}},mark=lambda _:None)
+                self.assertEqual(collect.call_count,1)
+
 if __name__=="__main__":unittest.main()
+
