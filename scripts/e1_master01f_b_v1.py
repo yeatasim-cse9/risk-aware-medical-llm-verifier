@@ -14,7 +14,7 @@ SEED=20261126
 PARTITIONS=("fit","selection","calibration")
 CONDITIONS=("full","removed","permuted")
 MODES=("legacy_lexical","evidence_only","question_answer_overlap","length","style",
-       "answer_only","neural","hybrid","hybrid_legacy")
+       "answer_only","question_only","question_answer","full_lexical","neural","hybrid","hybrid_legacy")
 ROLES=("ground_truth","hallucinated")
 def require(ok,code):
     if not ok:raise ValueError(code)
@@ -106,7 +106,7 @@ def lexical(row,mode):
         a=set(b.words(row["answer"]));q=set(b.words(row["question"]))
         return [len(a&q)/max(1,len(a))]
     if mode=="legacy_lexical":return b.features(row,"evidence_lexical")
-    require(mode in ("length","style","answer_only"),"LEXICAL_MODE")
+    require(mode in ("length","style","answer_only","question_only","question_answer","full_lexical"),"LEXICAL_MODE")
     return b.features(row,mode)
 
 def neural_map(rows,expected):
@@ -224,3 +224,64 @@ def compare_family(p,partition,scores,contrasts,*,replicates=1000):
     return {"groups":len(keys),"parents":len(expected),"replicates":replicates,
             "contrasts":out,"exploratory":True,"multiplicity_adjusted":False,
             "public_export_approved":False}
+
+# Candidate list and contrasts fixed before the next development run.
+# Existing dev has already been observed; this family remains exploratory.
+SUITE_CONTRASTS=(
+    ("hybrid/full","neural/full"),
+    ("hybrid/full","legacy_lexical/full"),
+    ("hybrid/full","full_lexical/full"),
+    ("hybrid/full","evidence_only/full"),
+    ("hybrid_legacy/full","hybrid/full"),
+    ("neural/full","neural/removed"),
+    ("neural/full","neural/permuted"),
+    ("evidence_only/full","evidence_only/removed"),
+    ("evidence_only/full","evidence_only/permuted"),
+    ("legacy_lexical/full","legacy_lexical/removed"),
+    ("legacy_lexical/full","legacy_lexical/permuted"),
+    ("hybrid/full","hybrid/removed"),
+    ("hybrid/full","hybrid/permuted"),
+    ("neural/full","neural/removed_retrained"),
+    ("legacy_lexical/full","legacy_lexical/removed_retrained"),
+    ("hybrid/full","hybrid/removed_retrained"),
+)
+
+def collect_features(engine,p,rows,partition,*,authorized):
+    """Future private integration only; no model loading or network here.
+    Uses original V4 collection contract and the same label-blind donor rule.
+    Caller must authenticate engine, mapping and rows before using this adapter.
+    """
+    require(authorized is True,"PRIVATE_AUTHORIZATION_REQUIRED")
+    check_rows(p,rows,partition)
+    from e1_master01e_v2_pilot import collect
+    features,cost=collect(engine,rows,partition)
+    expected={(x["source_group"],x["parent"]) for x in rows}
+    require(set(features)==set(cost)==set(CONDITIONS),"NEURAL_CONDITIONS")
+    for k in CONDITIONS:neural_map(features[k],expected)
+    return features,cost
+
+def selection_suite(p,train,dev,*,train_neural,dev_neural,replicates=1000):
+    """All models use identical fit/selection membership and fixed head optimizer.
+    No calibration access, automatic model selection, or public export.
+    Neural features must come from an authenticated matching collect_features call.
+    Returned fitted heads are private in-memory objects, not exportable evidence.
+    """
+    check_rows(p,train,"fit");check_rows(p,dev,"selection")
+    models={};scores={}
+    for mode in MODES:
+        needs=mode in ("neural","hybrid","hybrid_legacy")
+        tn=train_neural if needs else None
+        dn=dev_neural if needs else None
+        model=fit(p,train,mode,neural=tn)
+        models[mode]=model
+        conditions=CONDITIONS if mode in ("neural","hybrid","hybrid_legacy",
+                    "evidence_only","legacy_lexical","full_lexical") else ("full",)
+        for k in conditions:
+            scores[mode+"/"+k]=score(model,p,dev,"selection",condition=k,neural=dn)
+        if mode in ("neural","hybrid","legacy_lexical"):
+            refit=fit(p,train,mode,condition="removed",neural=tn)
+            scores[mode+"/removed_retrained"]=score(refit,p,dev,"selection",condition="removed",neural=dn)
+    comparisons=compare_family(p,"selection",scores,SUITE_CONTRASTS,replicates=replicates)
+    return models,{"metrics":{k:b.metrics(v) for k,v in scores.items()},
+                   "comparisons":comparisons,"clinical_validation":False,
+                   "test_used":False,"public_export_approved":False}
