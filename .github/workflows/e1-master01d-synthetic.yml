@@ -1,0 +1,45 @@
+name: E1 MASTER 01D Scientific Review Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01d*.py'
+      - 'scripts/e1_master01c*.py'
+      - 'scripts/e1_master01b_kaggle.py'
+      - 'scripts/e1_master01_validation_kaggle.py'
+      - 'tests/test_e1_master01d.py'
+      - 'docs/E1_MASTER01D*'
+      - '.github/workflows/e1-master01d-synthetic.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01d*.py'
+      - 'scripts/e1_master01c*.py'
+      - 'scripts/e1_master01b_kaggle.py'
+      - 'scripts/e1_master01_validation_kaggle.py'
+      - 'tests/test_e1_master01d.py'
+      - 'docs/E1_MASTER01D*'
+      - '.github/workflows/e1-master01d-synthetic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install signature verification dependency
+        run: |
+          python -m pip install cryptography==46.0.3
+          python -c 'from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey; Ed25519PrivateKey.generate()'
+      - name: Verify scientific review gates and exact uncertainty (synthetic only)
+        run: |
+          python -m compileall -q scripts/e1_master01d_review.py scripts/e1_master01d_gate.py scripts/e1_master01d_session.py
+          python -m unittest discover -s tests -p 'test_e1_master01d.py' -v
+      - name: Ensure no scientific approval config introduced
+        run: test ! -e configs/e1-approved-protocol.json
