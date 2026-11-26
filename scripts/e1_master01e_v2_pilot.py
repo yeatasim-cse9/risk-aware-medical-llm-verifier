@@ -114,3 +114,36 @@ def run(engine,train,dev,*,authorized):
         "inference_budget":{"train":tc,"dev":dc},"elapsed_seconds":time.monotonic()-started,
         "clinical_validation":False,"test_used":False,"final_split_frozen":False,
         "e1_execution_authorized":False,"public_export_approved":False}
+
+
+def prepare_verified_inputs(report,records,flags,normalizer,answers,*,authorized):
+    """Bind supplied reconstruction to pinned mapping, verify scope; no data I/O.
+    Caller must obtain records/flags via authorized historical pinned pipeline.
+    Does not independently authenticate raw answers or reperform encoder screening.
+    """
+    require(authorized is True,"PRIVATE_AUTHORIZATION_REQUIRED")
+    import e1_master01d_v2_integrity as d
+    import e1_master01c_core as c
+    d.verify_checkpoint(report)
+    d.verify_prior_source_files()
+    require({s:len(records[s]) for s in c.SPLITS}==d.ORIGINAL,"ORIGINAL_COUNTS")
+    kept,mapping,agg=d.reconstruct_candidate(records,flags,normalizer)
+    require(agg["quarantine"]==report["quarantine"] and agg["balance"]==report["balance"]
+        and c.digest({"seed":c.SEED,"assignment":mapping})==d.MAPPING,"CHECKPOINT_DRIFT")
+    require(type(answers) is dict and set(answers)==
+        {r["key"] for s in ("train","dev") for r in kept[s]},"TRAIN_DEV_ANSWER_SCOPE")
+    groups=d.source_components(records)
+    blocks={}
+    for s in ("train","dev"):
+        out=[]
+        for r in kept[s]:
+            a=answers[r["key"]]
+            require(type(a) in (list,tuple) and len(a)==2 and all(type(t) is str and bool(t.strip()) for t in a),
+                    "ANSWER_SCHEMA")
+            # Internal identifiers stay in authorized private memory.
+            out.append({"parent":c.digest(list(r["key"])),"source_group":c.digest(list(groups[r["key"]])),
+                        "partition":s,"question":r["question"],"context":r["context"],
+                        "answers":{"ground_truth":a[0],"hallucinated":a[1]}})
+        blocks[s]=out
+    validate_private_inputs(blocks["train"],blocks["dev"])
+    return blocks
