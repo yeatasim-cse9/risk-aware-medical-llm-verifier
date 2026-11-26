@@ -1,0 +1,36 @@
+name: Elite Redesign V2 Synthetic Math and Power
+on:
+  pull_request:
+    paths:
+      - 'scripts/pirc_v2_*.py'
+      - 'scripts/pirc_calibration_prototype.py'
+      - 'tests/test_pirc_v2.py'
+      - 'docs/ELITE_REDESIGN_V2*'
+      - '.github/workflows/elite-redesign-v2.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/pirc_v2_*.py'
+      - 'scripts/pirc_calibration_prototype.py'
+      - 'tests/test_pirc_v2.py'
+      - 'docs/ELITE_REDESIGN_V2*'
+      - '.github/workflows/elite-redesign-v2.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Synthetic mathematical and planning tests
+        run: python -m unittest discover -s tests -p 'test_pirc_v2.py' -v
+      - name: Hypothetical power and sample planning (no datasets)
+        run: python scripts/pirc_v2_power.py
+      - name: Preserve E1 block
+        run: test ! -e configs/e1-approved-protocol.json
