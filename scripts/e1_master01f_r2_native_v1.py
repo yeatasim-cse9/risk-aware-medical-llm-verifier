@@ -133,11 +133,45 @@ def normalize(info, tree):
     return metadata
 
 
-def probe():
+def observe_inventory(info, tree):
+    """Bounded public metadata observation only; does not qualify any path."""
+    require(type(info) is dict and info.get("id") == p.CANDIDATE
+            and type(info.get("sha")) is str and p.REV.fullmatch(info["sha"]),
+            "PUBLISHER_ID_REVISION")
+    require(type(tree) is list and 0 < len(tree) <= 10005, "TREE_SCHEMA")
+    rows = []
+    for entry in tree:
+        if type(entry) is not dict:
+            continue
+        path = entry.get("path")
+        if (type(path) is not str or len(path) > 200
+                or not re.fullmatch(r"[A-Za-z0-9_./-]+", path)
+                or any(x in ("", ".", "..") for x in path.split("/"))):
+            continue
+        kind = entry.get("type")
+        if kind not in ("file", "directory"):
+            continue
+        row = {"path": path, "type": kind}
+        size = entry.get("size")
+        if type(size) is int and size >= 0:
+            row["size"] = size
+        lfs = entry.get("lfs")
+        if type(lfs) is dict and type(lfs.get("oid")) is str and p.SHA.fullmatch(lfs["oid"]):
+            row["lfs_sha256"] = lfs["oid"]
+        rows.append(row)
+    return {"repository": p.CANDIDATE, "revision": info["sha"],
+            "tree_entries": len(tree), "observed_entries": rows[:200],
+            "inventory_truncated": len(rows) != len(tree) or len(rows) > 200,
+            "qualified": False}
+
+
+def probe(observer=None):
     info = metadata_json(API + "/revision/main")
     require(type(info) is dict and type(info.get("sha")) is str
             and p.REV.fullmatch(info["sha"]), "PUBLISHER_REVISION")
     tree = metadata_json(API + "/tree/" + info["sha"] + "?recursive=true")
+    if observer is not None:
+        observer(observe_inventory(info, tree))
     return normalize(info, tree)
 
 
@@ -285,7 +319,8 @@ def main():
     args = parser.parse_args()
     if args.op == "metadata":
         try:
-            data = probe()
+            data = probe(lambda observed: print(
+                "MASTER01FR2_PUBLIC_INVENTORY=" + canonical(observed).decode("ascii")))
             print("MASTER01FR2_PUBLIC_METADATA=" + canonical(data).decode("ascii"))
             print("MASTER01FR2_PUBLIC_METADATA_SHA256=" + p.digest(data))
             print("MASTER01FR2_PUBLIC_METADATA_OBSERVED_REVIEW_REQUIRED")

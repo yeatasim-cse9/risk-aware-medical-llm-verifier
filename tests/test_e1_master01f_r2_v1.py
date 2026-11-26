@@ -185,6 +185,16 @@ class Native(unittest.TestCase):
         self.assertEqual(n.metadata_reason(ValueError({"arbitrary": "data"})),
                          "UNCLASSIFIED_METADATA_ERROR")
 
+    def test_inventory_is_observation_only(self):
+        observed = n.observe_inventory(self.info, self.tree)
+        self.assertFalse(observed["qualified"])
+        self.assertEqual(observed["revision"], self.rev)
+        self.assertTrue(any(x["path"].startswith("data/test-") for x in observed["observed_entries"]))
+        self.tree.append({"type": "file", "path": "../bad"})
+        self.assertTrue(n.observe_inventory(self.info, self.tree)["inventory_truncated"])
+        self.assertFalse(any(x["path"] == "../bad" for x in
+                             n.observe_inventory(self.info, self.tree)["observed_entries"]))
+
 
 if __name__=="__main__":
     unittest.main()
