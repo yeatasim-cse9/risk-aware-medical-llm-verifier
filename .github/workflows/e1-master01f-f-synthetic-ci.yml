@@ -1,0 +1,33 @@
+name: MASTER 01F-F Preflight Hardening Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01f_f_*.py'
+      - 'tests/test_e1_master01f_f_v1.py'
+      - 'docs/E1_MASTER01F_F_PREFLIGHT.md'
+      - '.github/workflows/e1-master01f-f-synthetic-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01f_f_*.py'
+      - 'tests/test_e1_master01f_f_v1.py'
+      - 'docs/E1_MASTER01F_F_PREFLIGHT.md'
+      - '.github/workflows/e1-master01f-f-synthetic-ci.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Exercise immutable actual controller with an empty synthetic bundle
+        run: |
+          git worktree add --detach /tmp/master01ff-d 4ca7c69f7e00feea4d3d5dcd102c38f563abb64c
+          MASTER01FF_SYNTHETIC_D_CHECKOUT=/tmp/master01ff-d python -m unittest discover -s tests -p test_e1_master01f_f_v1.py -v
