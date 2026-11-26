@@ -53,11 +53,13 @@ def fit_joint(rows,targets,*,steps=400,rate=.1,l2=.01):
             and isfinite(rate) and 0<rate<=1 and type(l2) in (int,float)
             and isfinite(l2) and 0<=l2<=1,"TRAIN_PARAMETERS")
     X=[[1.0]+features(row) for row in rows];n=len(X);m=len(X[0])
+    require(all(row["answer_changed"] or t in ("00","11") for row,t in zip(rows,targets)),
+            "UNCHANGED_TRANSITION")
     W=[[0.0]*m for _ in STATES]
     for _ in range(steps):
         grad=[[0.0]*m for _ in STATES]
         for x,t in zip(X,targets):
-            p=_softmax([sum(a*b for a,b in zip(w,x)) for w in W])
+            p=_softmax([sum(a*b for a,b in zip(w,x)) for w in W],changed=bool(x[11]))
             for k,s in enumerate(STATES):
                 err=p[k]-(s==t)
                 for j,v in enumerate(x): grad[k][j]+=err*v
@@ -66,8 +68,9 @@ def fit_joint(rows,targets,*,steps=400,rate=.1,l2=.01):
                 W[k][j]-=rate*(grad[k][j]/n+(l2*W[k][j] if j else 0))
     return W
 
-def _softmax(z):
-    m=max(z);w=[exp(v-m) for v in z];s=sum(w)
+def _softmax(z,changed=True):
+    allowed=(0,1,2,3) if changed else (0,3)
+    m=max(z[i] for i in allowed);w=[exp(v-m) if i in allowed else 0.0 for i,v in enumerate(z)];s=sum(w)
     return [v/s for v in w]
 
 def predict_joint(weights,row):
@@ -76,7 +79,8 @@ def predict_joint(weights,row):
             all(type(w) is list and len(w)==len(x) and
                 all(type(v) in (int,float) and isfinite(v) for v in w) for w in weights),
             "WEIGHT_SCHEMA")
-    return dict(zip(STATES,_softmax([sum(a*b for a,b in zip(w,x)) for w in weights])))
+    return dict(zip(STATES,_softmax([sum(a*b for a,b in zip(w,x)) for w in weights],
+                                     changed=bool(row["answer_changed"]))))
 
 def independent_joint(p0,p1):
     """Same marginals, independence-imputed transition baseline."""
