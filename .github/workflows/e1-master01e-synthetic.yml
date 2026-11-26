@@ -1,0 +1,35 @@
+name: MASTER 01E Calibration and Shortcut Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01e_*.py'
+      - 'scripts/e1_master01d_v2_*.py'
+      - 'tests/test_e1_master01e.py'
+      - 'docs/E1_MASTER01E*'
+      - '.github/workflows/e1-master01e-synthetic.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01e_*.py'
+      - 'scripts/e1_master01d_v2_*.py'
+      - 'tests/test_e1_master01e.py'
+      - 'docs/E1_MASTER01E*'
+      - '.github/workflows/e1-master01e-synthetic.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_e1_master01e.py' -v
+      - run: python -m unittest discover -s tests -p 'test_master01dv3_verified_archive.py' -v
+      - run: |
+          test ! -e configs/e1-approved-protocol.json
+          python scripts/e1_readiness.py
