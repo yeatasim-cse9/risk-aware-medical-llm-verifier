@@ -1,0 +1,29 @@
+name: Elite Redesign Synthetic Calibration
+on:
+  pull_request:
+    paths:
+      - 'scripts/pirc_calibration_prototype.py'
+      - 'tests/test_pirc_calibration_prototype.py'
+      - 'docs/ELITE_RESEARCH_REDESIGN_PROTOCOL.md'
+      - '.github/workflows/elite-redesign-synthetic.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/pirc_calibration_prototype.py'
+      - 'tests/test_pirc_calibration_prototype.py'
+      - 'docs/ELITE_RESEARCH_REDESIGN_PROTOCOL.md'
+      - '.github/workflows/elite-redesign-synthetic.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_pirc_calibration_prototype.py' -v
