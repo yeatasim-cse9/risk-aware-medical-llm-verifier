@@ -32,6 +32,7 @@ class RecoveryController(unittest.TestCase):
                     (SCRIPTS/"e1_master01e_v4_diagnostics.py").read_bytes(),
                 "e1_master01e_v4_neural":b"# fixture\n",
                 "e1_master01e_v4_budget":b"# fixture\n",
+                "e1_master01e_v4_pilot":b"# fixture\n",
                 "e1_master01e_v3_validate":b"def validate(*args): pass\n",
                 "e1_master01c_core":b"import hashlib,json\ndef digest(x): return hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':')).encode()).hexdigest()\n"}
         hashes={k:hashlib.sha256(v).hexdigest() for k,v in bodies.items() if k not in w.EXTRA}
@@ -101,7 +102,7 @@ class RecoveryController(unittest.TestCase):
             args=("a"*40,{"base":"b"*64},{"recovery":"c"*64},"d"*64)
             e=w.envelope({"synthetic":True},*args)
             self.assertEqual(w.validate_envelope(e,*args),e)
-            for k,value in (("v4_source_commit","f"*40),("v4_file_sha256",{}),("schema_version",True)):
+            for k,value in (("v4_source_commit","f"*40),("v4_file_sha256",{}),("schema_version",True),("input_budget_audit_passed",False),("actual_budget_reconciled",1)):
                 with self.assertRaises(ValueError):w.validate_envelope({**e,k:value},*args)
             with self.assertRaises(ValueError):
                 w.validate_envelope({**e,"extra":"PRIVATE_FAKE"},*args)
