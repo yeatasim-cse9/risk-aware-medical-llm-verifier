@@ -1,0 +1,137 @@
+{
+  "bioasq_status": "NOT_ACQUIRED_RELEASE_AND_RIGHTS_PENDING",
+  "checkpoint_sha256": "83de2eb19a6ab64331a88a4ac1a7fe6b26f440fb8430acd0ff8d277e20871a5d",
+  "clinical_labels_approved": false,
+  "complete_semantic_leakage_excluded": false,
+  "device": "Tesla T4",
+  "e1_execution_authorized": false,
+  "final_split_frozen": false,
+  "human_review_completed": false,
+  "hypothetical_power": {
+    "groups": 0,
+    "scenarios": [],
+    "status": "NO_ELIGIBLE_CALIBRATION_GROUPS"
+  },
+  "iid_groups_verified": false,
+  "integrity_sha256": "a8e159311f8829a5b5ece7e12e0ffd3a76812f20dd3f066c9d508bf23304ace8",
+  "inventory_scope": "EXACT_PROXY_ONLY_PRIOR_01C_ORIGINALS_PROTECTED",
+  "mapping_sha256": "025d4323b4db15435b21c7479bfc3f63d9dbbef087b2976a26c542959e66c9cb",
+  "maxima": {
+    "minilm": {
+      "context": {
+        "dev__official_holdout": 0.8149875,
+        "dev__test": 0.805079,
+        "test__official_holdout": 0.8148848,
+        "train__dev": 0.8555893,
+        "train__official_holdout": 0.8425628,
+        "train__test": 0.8781399
+      },
+      "question": {
+        "dev__official_holdout": 0.7679858,
+        "dev__test": 0.7864698,
+        "test__official_holdout": 0.7360821,
+        "train__dev": 0.9094671,
+        "train__official_holdout": 0.8618726,
+        "train__test": 0.9268393
+      }
+    },
+    "pubmedbert": {
+      "context": {
+        "dev__official_holdout": 0.8465978,
+        "dev__test": 0.8504726,
+        "test__official_holdout": 0.8123976,
+        "train__dev": 0.8757358,
+        "train__official_holdout": 0.8847558,
+        "train__test": 0.9094917
+      },
+      "question": {
+        "dev__official_holdout": 0.7607752,
+        "dev__test": 0.8390777,
+        "test__official_holdout": 0.7430628,
+        "train__dev": 0.8627837,
+        "train__official_holdout": 0.8386818,
+        "train__test": 0.8889172
+      }
+    }
+  },
+  "new_calibration_cohort_approved": false,
+  "package_hashes": {
+    "e1_master01_validation_kaggle": "11d803b06167689df6a3caa290be69a8b9b519ee9e83ec0d5de619e95a43761e",
+    "e1_master01b_kaggle": "89bdecce4109aa0cc4dc90f1f8a537ce085f13a707c9c0df9258d36625f62e2f",
+    "e1_master01c_core": "a30e9116430a568e8fdb3d2aaa06dd791225246fe8b73b7f580b9c010d7a9602",
+    "e1_master01c_private": "6b3f764fa79c6f839cc6705c4cc05c3178d3c4432d52c762ecffa25a8c100cbc",
+    "e1_master01c_validate": "9ca0b260a08b25daa7edb4eac9e8ba8505233bd918d712ffebf2dee80bbb2ad3",
+    "e1_master01d_v2_cohort": "f11e50a2a8ca38b41128057bbae221446a10c5652423e2268a748c4fd80703b2",
+    "e1_master01d_v2_integrity": "03c46f1b016f984dcbd9ca789bd36fa31dfc43c776a252d60c238f03586bb5bc",
+    "e1_master01d_v3_private": "6cf08aefd98f4bf4dc7069b37e33f81557ce015c7a460929f5e0e83c66a4810c",
+    "e1_master01d_v3_validate": "db6e90919ac9ca364e67f1764bc56f12de86bdbca51dc17dd013b987dec7fbb5",
+    "pirc_calibration_prototype": "0b1f824c4485d22e5e302b2e3529259c38e7a849fb42ef7b93dea361e34cba3d",
+    "pirc_v2_method": "575eea8ff9009e7b27e2d957929309976f87cadca6dc4748e2f5f9491f0e4f4b",
+    "pirc_v2_power": "a8476af8218379e2189600c9368dd048898d18add3acd10704c6d4180f502886"
+  },
+  "package_source_commit": "c63169fc6e597b80d48fbcdaa01102c97abcddc8",
+  "private_rows_exported": false,
+  "pubmedqa_inventory": {
+    "candidate_rows": {
+      "development": 500,
+      "official_test": 0
+    },
+    "eligible_group_representatives": {
+      "calibration": 0,
+      "test": 0,
+      "train": 0,
+      "tune": 0
+    },
+    "excluded_rows": {
+      "missing_eligibility": 0,
+      "nonrepresentative_same_group": 0,
+      "official_test_overlap": 0,
+      "prior_protected_overlap": 500
+    }
+  },
+  "residual_flagged_pairs": 0,
+  "retained": {
+    "dev": 890,
+    "official_holdout": 500,
+    "test": 887,
+    "train": 7427
+  },
+  "schema_version": 1,
+  "scientific_experiment_executed": false,
+  "shortcut_diagnostics": {
+    "dev": {
+      "ground_truth_exact_context_copy": 0,
+      "ground_truth_role_longer": 667,
+      "hallucinated_exact_context_copy": 0,
+      "hallucinated_role_longer": 206,
+      "identical_normalized_roles": 0,
+      "length_tie": 17,
+      "parents": 890
+    },
+    "train": {
+      "ground_truth_exact_context_copy": 0,
+      "ground_truth_role_longer": 5465,
+      "hallucinated_exact_context_copy": 0,
+      "hallucinated_role_longer": 1723,
+      "identical_normalized_roles": 0,
+      "length_tie": 239,
+      "parents": 7427
+    }
+  },
+  "source_group_counts": {
+    "dev": 890,
+    "official_holdout": 500,
+    "test": 887,
+    "train": 7427
+  },
+  "source_proxy_conflicts": 0,
+  "status": "PRIVATE_BENCHMARK_AUDIT_ONLY",
+  "supplemental_exact_conflicts": 0,
+  "versions": {
+    "huggingface_hub": "1.33.0",
+    "numpy": "2.1.3",
+    "pyarrow": "23.0.1",
+    "torch": "2.11.0+cu130",
+    "transformers": "5.20.2"
+  }
+}
