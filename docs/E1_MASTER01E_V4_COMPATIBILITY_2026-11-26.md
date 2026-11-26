@@ -65,10 +65,72 @@ permuted forward checks and repeatability. No private data access or
 pilot submission. Report sanitized stage markers and peak memory.
 Do not manually install packages or retry a failure.
 
-Only after the GPU diagnostic passes: integrate the versioned V4 private
-controller with exact source pins, GPU smoke before historical
-reconstruction, both train/dev sampled input-budget checks before any
-pilot inference, fine-grained failure telemetry, strict CI, read-only
-preflight and separate fresh private data/model rights, quota and
-one-pilot authorization. This PR does not provide a private submission
-workflow and must not be treated as one. No scientific or clinical approval.
+## User-reported exact-runtime GPU qualification (2026-11-26)
+
+Qualification source commit: 4e579148961df905721b2601200a73a9c8e83de5.
+User reported WINDOW_BOUNDARY, FULL_FORWARD, REMOVED_FORWARD,
+PERMUTED_FORWARD and REPEAT_FULL, then:
+
+- MASTER01EV4_GPU_PEAK_ALLOCATED_BYTES=1149010944
+- MASTER01EV4_GPU_PEAK_RESERVED_BYTES=1226833920
+- MASTER01EV4_GPU_SYNTHETIC_MODEL_SMOKE_PASSED
+- MASTER01EV4_GPU_DIAGNOSTIC=EXACT_RUNTIME_PASS
+- MASTER01EV4_GPU_MEDICAL_DATA_USED=FALSE
+- MASTER01EV4_GPU_BOOTSTRAP_COMPLETE
+
+The reported exact-runtime marker is generated only after the pinned
+version checks and model hash checks. GPU T4 x2 selection was shown in
+the notebook screenshot; actual device/version marker lines were not
+included in the pasted excerpt. The evidence is user-reported, not
+independently fetched from Kaggle. Both CPU and GPU evidence are archived
+in configs/master01e-v4-public-qualification-2026-11-26.json.
+Authorization for that public GPU diagnostic is consumed.
+
+## Final private controller integration
+
+Separate V4 private runner, budget auditor, diagnostics, staged pilot and
+controller. Original 18 module bytes and historical checkpoint/archive,
+model manifest and previous controller remain pinned. The 5 new runtime
+modules are bound by SHA256 in the V4 envelope. The public qualified
+engine and two diagnostic source files are fixed to the qualification
+commit; evidence bytes are fixed to their archival commit. Original
+V3 validator remains the inner aggregate validator. No clinical
+validation or scientific approval is implied.
+
+The controller requests NvidiaTeslaT4 (T4 x2), asserts two Tesla T4
+devices at runtime and uses cuda:0 only; no TPU or parallel GPU rewrite.
+It repeats public deterministic GPU smoke before historical data access.
+The historical pipeline is unchanged and uses GPU encoder screening for
+mapping reconstruction before the NLI input audit. The audit checks
+both exact deterministic train/dev pilot samples (128 and 64 parents)
+before any private NLI forward: both answer roles, full/removed/permuted
+evidence, every real and padded slot, complete context token coverage,
+vocab range, fixed-length tensor and mask/segment contracts, baseline
+feature finiteness and existing same-partition permutation. It computes
+expected aggregate costs privately, then reconciles train and dev
+actual inference costs before head fitting. Overflow fails closed;
+no row dropping, truncation, resampling, fallback or budget change.
+The staged pilot uses the original training, metrics, sampling,
+bootstrap and baseline functions with only stage markers and exact
+cost checks added. No test answers or final scientific evaluation.
+Private diagnostic output contains fixed stages and allowlisted codes;
+no raw exceptions, private text, row IDs or small-cell results.
+
+CI checks synthetic behavior, AST equivalence, original metrics,
+unauthorized wrapper failure, tamper and duplicate protection, and
+independently compares all embedded bytes and hashes in the actual
+code-only package against Git commit contents. The new slug is
+yeatasimbillah/medical-llm-e1-master01e-v4-private-pilot-gpu-v1.
+Both old failed notebooks must remain in error state.
+
+After merge AND verified main CI: Actions > E1 MASTER 01E V4 Private Pilot
+Controller > Run workflow > main > operation preflight; all confirmation
+checkboxes false; expected_submission_commit blank. Expected marker
+MASTER01EV4_PREFLIGHT_OK_QUOTA_AMOUNT_NOT_CERTIFIED.
+Read-only preflight does not determine actual remaining GPU quota or
+inspect private input lengths. Real-data budget audit executes inside
+the separately authorized future private pilot, before private NLI
+inference. New explicit dataset/model rights and GPU quota confirmation
+and exactly-one-run authorization required. No automatic retry or new
+GPU submission in this implementation phase. No claim that unknown
+private-data or infrastructure failures have been eliminated.
