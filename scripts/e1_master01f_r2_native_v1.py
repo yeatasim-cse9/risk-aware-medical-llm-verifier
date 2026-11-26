@@ -29,6 +29,8 @@ DOWNLOAD_HOSTS = frozenset({
     "cdn-lfs-us-1.hf.co", "cdn-lfs-eu-1.hf.co",
     "cdn-lfs-us-1.huggingface.co", "cdn-lfs-eu-1.huggingface.co",
     "cas-bridge.xethub.hf.co",
+    # Observed on private Kaggle; documented official HF US CDN edge.
+    "us.gcp.cdn.hf.co",
 })
 require = p.require
 
