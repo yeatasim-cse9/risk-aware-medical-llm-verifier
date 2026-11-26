@@ -27,11 +27,11 @@ def upper_cutoff(n,p,alpha):
 
 def lower_power(n,null,alternative,alpha):
     k=lower_cutoff(n,null,alpha)
-    return sum(binomial_pmf(n,alternative)[:k+1])
+    return min(1.0,sum(binomial_pmf(n,alternative)[:k+1]))
 
 def upper_power(n,null,alternative,alpha):
     k=upper_cutoff(n,null,alpha)
-    return sum(binomial_pmf(n,alternative)[k:])
+    return min(1.0,sum(binomial_pmf(n,alternative)[k:]))
 
 def feasibility(n,*,policies=12,alpha=.05,release_cap=.10,introduced_cap=.05,
                 coverage_floor=.50,true_release_error=.03,true_introduced_error=.01,
@@ -57,9 +57,10 @@ def feasibility(n,*,policies=12,alpha=.05,release_cap=.10,introduced_cap=.05,
     i=sum(w*lower_power(m,introduced_cap,true_introduced_error,delta)
           for m,w in enumerate(binomial_pmf(n,true_original_correct)) if m and w>1e-16)
     c=upper_power(n,coverage_floor,true_coverage,delta)
+    r,i=min(1.0,r),min(1.0,i)
     return {"n":n,"policies":policies,"first_holm_threshold":delta,
             "release_power":r,"introduced_power":i,"coverage_power":c,
-            "joint_power_lower_bound":max(0.0,r+i+c-2),
+            "joint_power_lower_bound":max(0.0,min(r,i,c,r+i+c-2)),
             "joint_power_upper_bound":min(r,i,c)}
 
 def mcnemar_power(n,p01,p10,alpha=.05):
@@ -126,6 +127,8 @@ def report():
          "calibration":[feasibility(n) for n in (200,300,500,900,1200)],
          "ap_group_count_sensitivity":[{"hypothetical_sd":sd,"groups_80pct":ap_planning_groups(sd),
              "groups_90pct":ap_planning_groups(sd,power=.90)} for sd in (.15,.25,.35)],
+         "calibration_tight_margin":[feasibility(n,true_release_error=.07,true_introduced_error=.03)
+                                      for n in (300,500,900,1200)],
          "paired_power":[{"n":n,"p01":a,"p10":b,"power":mcnemar_power(n,a,b,.025)}
                          for n in (300,500,887) for a,b in ((.08,.04),(.10,.04),(.12,.04))]}
     print(json.dumps(out,sort_keys=True,indent=2))
