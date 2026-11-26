@@ -27,6 +27,7 @@ def prob(x):
 class Plan:
     # Private in-memory identifiers only. Never serialize publicly.
     members:tuple
+    exposed_fit_groups:frozenset
 
 def metadata(rows,partition):
     require(type(rows) is list and bool(rows),"METADATA_ROWS")
@@ -40,7 +41,18 @@ def metadata(rows,partition):
     require(len({p for p,g in out})==len(out),"DUPLICATE_PARENT")
     return out
 
-def plan(train_meta,dev_meta,*,calibration_groups):
+def prior_pilot_groups(train_meta):
+    """Reproduce the exact MASTER01E V4 train sample from metadata alone."""
+    tr=metadata(train_meta,"train")
+    seen=set()
+    for parent,g in sorted(tr,key=lambda x:(hashlib.sha256(
+            (str(SEED)+":"+x[0]).encode()).digest(),x[0])):
+        seen.add(g)
+        if len(seen)==128:break
+    require(len(seen)==128,"PRIOR_PILOT_GROUP_COUNT")
+    return frozenset(seen)
+
+def plan(train_meta,dev_meta,*,calibration_groups,additional_exposed_fit_groups):
     """Split existing train only; existing dev remains observed development selection.
     Group assignment label-blind and independent of lengths/scores/answers.
     No test or holdout metadata accepted by this API.
@@ -49,11 +61,17 @@ def plan(train_meta,dev_meta,*,calibration_groups):
     groups={g for p,g in tr}
     require(not(groups&{g for p,g in dv} or {p for p,g in tr}&{p for p,g in dv}),
             "SOURCE_OVERLAP")
-    require(type(calibration_groups) is int and 2<=calibration_groups<=len(groups)-2,
+    require(type(additional_exposed_fit_groups) is frozenset
+            and additional_exposed_fit_groups<=groups,"EXPOSURE_INVENTORY")
+    exposed=prior_pilot_groups(train_meta)|additional_exposed_fit_groups
+    eligible=groups-exposed
+    require(type(calibration_groups) is int and 2<=calibration_groups<=min(len(eligible),len(groups)-2),
             "CALIBRATION_GROUP_COUNT")
-    cal=set(sorted(groups,key=lambda g:(key(g),g))[:calibration_groups])
-    return Plan(tuple(sorted([(p,g,"calibration" if g in cal else "fit") for p,g in tr]
-                            +[(p,g,"selection") for p,g in dv])))
+    cal=set(sorted(eligible,key=lambda g:(key(g),g))[:calibration_groups])
+    result=Plan(tuple(sorted([(p,g,"calibration" if g in cal else "fit") for p,g in tr]
+                            +[(p,g,"selection") for p,g in dv])),exposed)
+    validate_plan(result)
+    return result
 
 def validate_plan(p):
     require(type(p) is Plan and type(p.members) is tuple and bool(p.members),"PLAN")
@@ -65,6 +83,8 @@ def validate_plan(p):
         require(parent not in seen and groups.get(g,k)==k,"PLAN_OVERLAP")
         seen.add(parent);groups[g]=k;counts[k].add(g)
     require(all(len(v)>=2 for v in counts.values()),"PLAN_GROUP_COUNT")
+    require(type(p.exposed_fit_groups) is frozenset and p.exposed_fit_groups<=counts["fit"],
+            "EXPOSED_CALIBRATION_GROUP")
 
 def check_rows(p,rows,partition):
     validate_plan(p)
@@ -79,6 +99,8 @@ def evidence_only(answer,context):
     return [len(a&c)/len(a),len(a&c)/max(1,len(a|c))]
 
 def lexical(row,mode):
+    require(type(row) is dict and set(row)=={"question","answer","context"}
+            and all(type(v) is str for v in row.values()),"LEXICAL_ROW")
     if mode=="evidence_only":return evidence_only(row["answer"],row["context"])
     if mode=="question_answer_overlap":
         a=set(b.words(row["answer"]));q=set(b.words(row["question"]))
