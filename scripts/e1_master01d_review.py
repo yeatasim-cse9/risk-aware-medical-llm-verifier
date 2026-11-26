@@ -34,6 +34,8 @@ def check_checkpoint(report,private):
             report["quarantine"]["residual_flagged_pairs"]==0 and
             report["quarantine"]["source_proxy_conflicts"]==0 and
             report["review_queue_count"]==771,"CHECKPOINT_REMEDIATION")
+    require({s:report["quarantine"]["counts"][s]["retained"] for s in c.SPLITS}==COUNTS,
+            "CHECKPOINT_RETENTION")
     mapping=private["retained_mapping"]
     c.freeze_preparation(mapping,MAPPING,dict.fromkeys(c.GATES,False))
     require(Counter(x[2] for x in mapping)=={s:COUNTS[s] for s in c.SPLITS[:3]},
@@ -89,7 +91,8 @@ def plan_digest():
         "clinical_sample":"retained_parent_SRSWOR_within_split_config_category_difficulty",
         "cap_per_stratum":CLINICAL_CAP,"seed":c.SEED+2000,
         "semantic_sample":"all_171_flags_plus_100_uniform_unflagged_per_six_strata",
-        "endpoints":["strict_role_concordance","confirmed_role_discordance","uncertain_parent"],
+        "endpoints":["strict_role_concordance","confirmed_role_discordance","uncertain_parent",
+                     "potentially_major_impact","both_roles_label_agree"],
         "interval":"exact_hypergeometric_Bonferroni_within_endpoint_95_percent",
         "reviewers":2,"adjudicator":1,"no_test_tuning":True})
 
@@ -168,20 +171,23 @@ def resolve(expected,first,second,adjudicated,*,clinical=False):
     summary["uncertain_impact"]=sum(v.get("impact")=="uncertain" for v in final.values())
     return final,summary
 
-def semantic_analysis(queue,key,final):
+def semantic_analysis(queue,key,final,*,first,second):
     """All flagged pairs are a census of reconstructed flags, not original IDs.
     For unflagged sample, unresolved is included in conservative positive bound.
     """
-    require(set(key)==set(final),"REVIEW_COVERAGE")
+    require(set(key)==set(final)==set(first)==set(second),"REVIEW_COVERAGE")
     by_pair={x["pair"]:x for x in queue}
     require(len(by_pair)==len(queue)==len(key) and set(key.values())==set(by_pair),
             "SEMANTIC_KEY_MISMATCH")
-    cells=defaultdict(Counter); flagged=Counter()
+    cells=defaultdict(Counter); flagged=Counter(); agreements=Counter(); flagged_agree=0
     for token,pair in key.items():
         item=by_pair[pair];label=final[token]["label"]
         require(label in c.RUBRIC,"REVIEW_LABEL")
-        if item["flagged"]: flagged[label]+=1
-        else: cells[tuple(item["stratum"])][label]+=1
+        agree=int(first[token]["label"]==second[token]["label"])
+        if item["flagged"]:
+            flagged[label]+=1;flagged_agree+=agree
+        else:
+            g=tuple(item["stratum"]);cells[g][label]+=1;agreements[g]+=agree
     require(sum(flagged.values())==171 and set(cells)==set(c.PAIRS),"SEMANTIC_COUNTS")
     summaries={}
     for a,b in c.PAIRS:
@@ -192,40 +198,54 @@ def semantic_analysis(queue,key,final):
         u=counts["unresolved"]
         # Simultaneous across six strata; upper bound for possible positives.
         _,upper=interval(N,n,x+u,Fraction(1,120))
+        al,au=interval(N,n,agreements[a,b],Fraction(1,120))
         summaries[a+"__"+b]={"population":N,"sample":n,"confirmed_positive":x,
-                            "unresolved":u,"possible_positive_ci95_upper":upper/N}
+                            "unresolved":u,"possible_positive_ci95_upper":upper/N,
+                            "label_agreement":agreements[a,b]/n,"label_agreement_ci95":[al/N,au/N]}
     return {"flagged_dispositions":{k:flagged[k] for k in sorted(c.RUBRIC)},
+            "flagged_label_agreement":flagged_agree/171,
             "unflagged_strata":summaries,"complete_semantic_leakage_excluded":False,
             "requires_missed_pair_remediation":any(z["confirmed_positive"] or z["unresolved"]
                                                  for z in summaries.values())}
 
-def clinical_analysis(custodian,final):
+def clinical_analysis(custodian,final,*,first,second):
     """Private decode only after both reviews are locked. Pair is analysis unit.
     Test-level summaries are custodian-only; no tuning or public small-cell exports.
     """
     key=custodian["clinical_key"];strata=custodian["clinical_strata"]
     require(set(key)==set(final),"REVIEW_COVERAGE")
     rows={r["key"]:(s,r) for s in c.SPLITS[:3] for r in custodian["records"][s]}
+    retained={tuple(x[:2]) for x in custodian["mapping"]}
+    require(retained<=set(rows),"RETAINED_KEY")
+    population=Counter((rows[k][0],rows[k][1]["config"],rows[k][1]["category"],
+                        rows[k][1]["difficulty"]) for k in retained)
+    require(set(population)==set(strata) and all(strata[g]["population"]==n
+            for g,n in population.items()),"CLINICAL_POPULATION")
     paired=defaultdict(dict)
     for token,(k,role) in key.items():
-        require(k in rows and type(role) is int and role in (0,1) and
+        require(k in retained and type(role) is int and role in (0,1) and
                 role not in paired[k],"CLINICAL_KEY")
         label=final[token]["label"]
         require(label in c.CLINICAL,"REVIEW_LABEL")
-        paired[k][role]=label
+        paired[k][role]=token
     cells=defaultdict(Counter)
     for k,roles in paired.items():
         require(set(roles)=={0,1},"PAIRED_COVERAGE")
         s,r=rows[k];g=(s,r["config"],r["category"],r["difficulty"])
-        a,b=roles[0],roles[1]
+        a,b=(final[roles[i]]["label"] for i in (0,1))
         cells[g]["n"]+=1
         cells[g]["strict_role_concordance"]+=int(a=="supported" and b=="contradicted")
         cells[g]["confirmed_role_discordance"]+=int(a=="contradicted" or b=="supported")
         cells[g]["uncertain_parent"]+=int(a in CLINICAL_UNCERTAIN or b in CLINICAL_UNCERTAIN)
+        cells[g]["potentially_major_impact"]+=int(any(final[t]["impact"]=="potentially_major"
+                                                    for t in roles.values()))
+        cells[g]["both_roles_label_agree"]+=int(all(first[t]["label"]==second[t]["label"]
+                                                   for t in roles.values()))
     require(set(cells)==set(strata),"CLINICAL_STRATA")
     for g,z in strata.items():
         require(cells[g]["n"]==z["sample"]==min(z["population"],CLINICAL_CAP),"CLINICAL_COUNTS")
-    endpoints=("strict_role_concordance","confirmed_role_discordance","uncertain_parent")
+    endpoints=("strict_role_concordance","confirmed_role_discordance","uncertain_parent",
+               "potentially_major_impact","both_roles_label_agree")
     return {s:{e:stratified_binary([(z["population"],z["sample"],cells[g][e])
                    for g,z in strata.items() if g[0]==s]) for e in endpoints}
             for s in c.SPLITS[:3]}
