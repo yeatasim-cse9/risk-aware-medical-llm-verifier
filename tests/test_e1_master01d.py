@@ -12,8 +12,11 @@ import e1_master01c_core as c
 import e1_master01d_review as d
 import e1_master01d_gate as g
 from test_e1_master01c_core import fixture
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+try:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+except ImportError:
+    Ed25519PrivateKey=None
 
 def judgment(label,impact=None):
     x={"label":label,"rationale":"invented reason","evidence":"invented evidence"}
@@ -108,9 +111,11 @@ class TestMaster01D(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"CLINICAL_POPULATION"):
             d.clinical_analysis(cust,final,first=final,second=final)
 
+    @unittest.skipIf(Ed25519PrivateKey is None, "Dedicated 01D CI installs cryptography")
     def test_preaccess_signature_and_tampering(self):
         keys,registry,sha=trust();s=subject()
-        r=receipts(keys,g.PRE_ACCESS,s,"pre_access")
+        r=receipts(keys,g.PRE_ACCESS,s,"pre_access",{"private_environment":s["environment"],
+            "review_plan":s["review_plan"],"one_gpu_run":s["session"]})
         self.assertFalse(g.pre_access(r,s,registry,sha)["gpu_submitted"])
         r["dataset_rights"]["payload"]["evidence_sha256"]="e"*64
         with self.assertRaisesRegex(ValueError,"INVALID_APPROVAL_SIGNATURE"):
@@ -118,12 +123,14 @@ class TestMaster01D(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"TRUST_ROOT_MISMATCH"):
             g.pre_access(r,s,registry,"0"*64)
 
+    @unittest.skipIf(Ed25519PrivateKey is None, "Dedicated 01D CI installs cryptography")
     def test_independent_panel(self):
         _,registry,_=trust()
         registry["clinical_reviewer_2"]=registry["clinical_reviewer_1"].copy()
         with self.assertRaisesRegex(ValueError,"ROLE_SEPARATION"):
             g.verify_registry(registry,c.digest(registry))
 
+    @unittest.skipIf(Ed25519PrivateKey is None, "Dedicated 01D CI installs cryptography")
     def test_signed_review_bound_to_packets(self):
         keys,registry,sha=trust();s=subject();packet_digest="f"*64
         submissions={}
@@ -138,6 +145,7 @@ class TestMaster01D(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"INVALID_APPROVAL_SIGNATURE"):
             g.review_signed({"x"},submissions,registry,sha,s,packet_digest="e"*64)
 
+    @unittest.skipIf(Ed25519PrivateKey is None, "Dedicated 01D CI installs cryptography")
     def test_manual_freeze_even_with_signed_receipts(self):
         keys,registry,sha=trust()
         mapping=[["synthetic",0,"train"],["synthetic",1,"dev"],["synthetic",2,"test"]]
