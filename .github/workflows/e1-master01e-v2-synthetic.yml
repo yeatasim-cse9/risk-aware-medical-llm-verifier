@@ -1,0 +1,43 @@
+name: MASTER 01E V2 Neural Pilot Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01e*.py'
+      - 'tests/test_e1_master01e_v2.py'
+      - 'docs/E1_MASTER01E_V2*'
+      - '.github/workflows/e1-master01e-v2-synthetic.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01e*.py'
+      - 'tests/test_e1_master01e_v2.py'
+      - 'docs/E1_MASTER01E_V2*'
+      - '.github/workflows/e1-master01e-v2-synthetic.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install CPU runtime only (no pretrained weights)
+        run: |
+          python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install transformers==4.57.3 sentencepiece==0.2.1
+      - name: Offline synthetic neural and historical tests
+        env:
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+          HF_DATASETS_OFFLINE: '1'
+        run: |
+          python -c 'import torch,transformers; assert not torch.cuda.is_available(); assert transformers.__version__=="4.57.3"'
+          python -m unittest discover -s tests -p 'test_e1_master01e_v2.py' -v
+          python -m unittest discover -s tests -p 'test_master01dv3_verified_archive.py' -v
+          test ! -e configs/e1-approved-protocol.json
+          python scripts/e1_readiness.py
