@@ -40,10 +40,13 @@ def load_offline(root,manifest,expected_digest,*,authorized,device="cuda:0"):
     import torch
     from transformers import AutoTokenizer,AutoModelForSequenceClassification
     require(device=="cpu" or device=="cuda:0" and torch.cuda.is_available(),"DEVICE")
-    tok=AutoTokenizer.from_pretrained(str(root),local_files_only=True,trust_remote_code=False)
+    # Use explicit slow tokenizer pair construction; candidate smoke must pass
+    # before any real rows are acquired. No silent fallback or remote code.
+    tok=AutoTokenizer.from_pretrained(str(root),local_files_only=True,trust_remote_code=False,use_fast=False)
     model,info=AutoModelForSequenceClassification.from_pretrained(str(root),
             local_files_only=True,trust_remote_code=False,use_safetensors=True,
             output_loading_info=True)
+    require(model.config.model_type=="deberta-v2","CANDIDATE_ARCHITECTURE")
     require(not any(info.get(k) for k in ("missing_keys","unexpected_keys","mismatched_keys","error_msgs")),
             "MODEL_LOAD_MISMATCH")
     return Engine(tok,model,device)
