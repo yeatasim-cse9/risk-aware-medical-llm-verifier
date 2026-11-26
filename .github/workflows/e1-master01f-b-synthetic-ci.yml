@@ -1,0 +1,30 @@
+name: MASTER 01F-B Shortcut and Calibration Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01f_b_*.py'
+      - 'tests/test_e1_master01f_b_v1.py'
+      - '.github/workflows/e1-master01f-b-synthetic-ci.yml'
+      - 'docs/E1_MASTER01F_B_DESIGN.md'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01f_b_*.py'
+      - 'tests/test_e1_master01f_b_v1.py'
+      - '.github/workflows/e1-master01f-b-synthetic-ci.yml'
+      - 'docs/E1_MASTER01F_B_DESIGN.md'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01f_b_v1.py -v
+      - run: python -m py_compile scripts/e1_master01f_b_v1.py scripts/e1_master01f_b_calibration_v1.py
