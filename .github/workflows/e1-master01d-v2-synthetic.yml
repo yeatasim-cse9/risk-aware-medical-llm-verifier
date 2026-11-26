@@ -1,0 +1,47 @@
+name: MASTER 01D V2 Benchmark Integrity Synthetic CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01d_v2_*.py'
+      - 'scripts/e1_master01c_*.py'
+      - 'scripts/e1_master01b_kaggle.py'
+      - 'scripts/e1_master01_validation_kaggle.py'
+      - 'scripts/pirc_v2_*.py'
+      - 'scripts/e1_readiness.py'
+      - 'configs/master01c-verified-aggregate-2026-11-26.json'
+      - 'tests/test_e1_master01d_v2.py'
+      - 'docs/E1_MASTER01D_V2*'
+      - '.github/workflows/e1-master01d-v2-synthetic.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01d_v2_*.py'
+      - 'scripts/e1_master01c_*.py'
+      - 'scripts/e1_master01b_kaggle.py'
+      - 'scripts/e1_master01_validation_kaggle.py'
+      - 'scripts/pirc_v2_*.py'
+      - 'scripts/e1_readiness.py'
+      - 'configs/master01c-verified-aggregate-2026-11-26.json'
+      - 'tests/test_e1_master01d_v2.py'
+      - 'docs/E1_MASTER01D_V2*'
+      - '.github/workflows/e1-master01d-v2-synthetic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Historical sanitized evidence and synthetic integrity tests
+        run: python -m unittest discover -s tests -p 'test_e1_master01d_v2.py' -v
+      - name: Confirm legacy E1 remains blocked
+        run: |
+          test ! -e configs/e1-approved-protocol.json
+          python scripts/e1_readiness.py
