@@ -9,6 +9,7 @@ import e1_master01e_v3_assets as assets
 import e1_master01e_v4_neural as neural
 import e1_master01e_v4_budget as budget
 import e1_master01e_v2_pilot as pilot
+import e1_master01e_v4_pilot as staged_pilot
 require=c.require
 
 def run(root,report,manifest,manifest_digest,recorder):
@@ -97,7 +98,8 @@ def run(root,report,manifest,manifest_digest,recorder):
     torch.cuda.reset_peak_memory_stats()
     expected=budget.audit_both(engine,blocks["train"],blocks["dev"],recorder.mark)
     recorder.mark("PILOT_EXECUTION")
-    result=pilot.run(engine,blocks["train"],blocks["dev"],authorized=True)
+    result=staged_pilot.run(engine,blocks["train"],blocks["dev"],authorized=True,
+                            expected=expected,mark=recorder.mark)
     require(result["inference_budget"]==expected,"AUDIT_ACTUAL_BUDGET_MISMATCH")
     # Do not export small-cell strata or row IDs; even aggregate counts omitted.
     recorder.mark("AGGREGATE_PREPARE")
