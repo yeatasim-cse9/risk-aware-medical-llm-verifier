@@ -27,7 +27,7 @@ REPORT="master01ev4_private_aggregate.json"
 VERIFIED="master01ev4_verified_aggregate.json"
 MANIFEST_DIGEST="a1d1677a97ca4a7b6a57c0f0e369c54a53eca014bf5daf1791122d9d7642b1e8"
 EXTRA=("e1_master01e_v4_diagnostics","e1_master01e_v4_private",
-       "e1_master01e_v4_neural","e1_master01e_v4_budget")
+       "e1_master01e_v4_neural","e1_master01e_v4_budget","e1_master01e_v4_pilot")
 QUALIFIED="4e579148961df905721b2601200a73a9c8e83de5"
 EVIDENCE_COMMIT="64f674eb7341b1c9d4787f9f564bda45c5e66b1c"
 EVIDENCE="configs/master01e-v4-public-qualification-2026-11-26.json"
@@ -73,16 +73,18 @@ def envelope(aggregate,commit,hashes,recovery,md):
     validator.validate(aggregate,commit,hashes,md)
     result={"schema_version":1,"kind":"MASTER01EV4_PRIVATE_V1",
             "v4_source_commit":commit,"v4_file_sha256":recovery,
+            "input_budget_audit_passed":True,"actual_budget_reconciled":True,
             "aggregate":aggregate}
     result["integrity_sha256"]=core.digest(result)
     return result
 
 def validate_envelope(value,commit,hashes,recovery,md):
     require(type(value) is dict and set(value)=={"schema_version","kind",
-        "v4_source_commit","v4_file_sha256","aggregate","integrity_sha256"},
+        "v4_source_commit","v4_file_sha256","input_budget_audit_passed","actual_budget_reconciled","aggregate","integrity_sha256"},
         "RECOVERY_SCHEMA")
     require(value==envelope(value["aggregate"],commit,hashes,recovery,md)
-            and type(value["schema_version"]) is int,"RECOVERY_INTEGRITY")
+            and type(value["schema_version"]) is int
+            and value["input_budget_audit_passed"] is True and value["actual_budget_reconciled"] is True,"RECOVERY_INTEGRITY")
     return value
 
 def render(commit,bodies,hashes,checkpoint,manifest,md,recovery,authorized,
