@@ -117,7 +117,7 @@ class TestMaster01D(unittest.TestCase):
         answers={r["key"]:("invented A","invented B") for s in c.SPLITS[:3] for r in rows[s]}
         allocation=Counter((s,r["config"],r["category"],r["difficulty"])
                            for s in c.SPLITS[:3] for r in rows[s])
-        packets,key,strata=c.clinical_review_plan(rows,answers,allocation,b"x"*32)
+        packets,key,strata=c.clinical_review_plan(rows,answers,dict(allocation),b"x"*32)
         mapping=sorted([*r["key"],s] for s in c.SPLITS[:3] for r in rows[s])
         cust={"records":rows,"mapping":mapping,"clinical_key":key,"clinical_strata":strata}
         final={t:judgment("supported" if role==0 else "contradicted","none")
