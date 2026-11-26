@@ -131,4 +131,39 @@ class Statistics(unittest.TestCase):
         self.assertEqual(out["policies"][0]["error_groups"],0)
         self.assertEqual(out["policies"][0]["answer_coverage_descriptive"],.5)
         self.assertFalse(out["revision_evaluated"])
+class Suite(unittest.TestCase):
+    def test_fixed_suite_and_no_calibration_access(self):
+        p,d=small()
+        models,result=f.selection_suite(p,d["fit"],d["selection"],
+            train_neural=neural(d["fit"]),dev_neural=neural(d["selection"]),replicates=100)
+        self.assertEqual(set(models),set(f.MODES))
+        self.assertEqual(len(result["comparisons"]["contrasts"]),len(f.SUITE_CONTRASTS))
+        self.assertFalse(result["test_used"])
+        self.assertFalse(result["public_export_approved"])
+        self.assertTrue(all(x["parents"]==3 for x in result["metrics"].values()))
+        self.assertIn("legacy_lexical/removed_retrained",result["metrics"])
+        self.assertIn("hybrid/permuted",result["metrics"])
+    def test_collection_adapter_scope_and_authorization(self):
+        p,d=small();rr=d["fit"]
+        with patch.object(prior,"collect") as collect:
+            with self.assertRaisesRegex(ValueError,"PRIVATE_AUTHORIZATION_REQUIRED"):
+                f.collect_features(None,p,rr,"fit",authorized=False)
+            with self.assertRaises(ValueError):
+                f.collect_features(None,p,d["calibration"],"fit",authorized=True)
+            collect.assert_not_called()
+            collect.return_value=(neural(rr),dict.fromkeys(f.CONDITIONS,{}))
+            v,cost=f.collect_features(None,p,rr,"fit",authorized=True)
+            self.assertEqual(v,neural(rr))
+            collect.assert_called_once_with(None,rr,"fit")
+    def test_group_representative_and_calibration_alignment(self):
+        p,d=small()
+        p=f.Plan(p.members+(("extra","calibrationg0","calibration"),),frozenset())
+        self.assertEqual(len(c.representatives(p)),3)
+        self.assertEqual(len({g for g,a in c.representatives(p)}),3)
+        m=f.fit(p,d["fit"],"evidence_only")
+        rr=d["calibration"]+[row("extra","calibrationg0","calibration")]
+        bad=[(x["source_group"],x["parent"],(.01,.99)) for x in rr[:-1]]
+        with patch.object(f,"score",return_value=bad):
+            with self.assertRaisesRegex(ValueError,"SCORE_ALIGNMENT"):c.calibration(c.freeze(m),p,rr)
+        with self.assertRaises(ValueError):c.freeze(dataclasses.replace(m,trained_condition="removed"))
 if __name__=="__main__":unittest.main()
