@@ -1,0 +1,179 @@
+name: E1 MASTER 01D V3 Private GPU Controller
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01d_v3_*.py'
+      - 'scripts/e1_master01d_v2_*.py'
+      - 'scripts/e1_master01c_*.py'
+      - 'scripts/e1_master01b_kaggle.py'
+      - 'scripts/e1_master01_validation_kaggle.py'
+      - 'scripts/pirc*.py'
+      - 'scripts/kaggle_status.py'
+      - 'tests/test_e1_master01d_v3.py'
+      - 'configs/master01c-verified-aggregate-2026-11-26.json'
+      - '.github/workflows/e1-master01d-v3-private-gpu.yml'
+  pull_request:
+    paths:
+      - 'scripts/e1_master01d_v3_*.py'
+      - 'scripts/e1_master01d_v2_*.py'
+      - 'scripts/e1_master01c_*.py'
+      - 'scripts/e1_master01b_kaggle.py'
+      - 'scripts/e1_master01_validation_kaggle.py'
+      - 'scripts/pirc*.py'
+      - 'scripts/kaggle_status.py'
+      - 'tests/test_e1_master01d_v3.py'
+      - 'configs/master01c-verified-aggregate-2026-11-26.json'
+      - '.github/workflows/e1-master01d-v3-private-gpu.yml'
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [preflight, prepare, submit, status, verify]
+        default: preflight
+        required: true
+      confirm_dataset_rights:
+        type: boolean
+        default: false
+        description: Fresh private processing permission for pinned MedHallu and PubMedQA including inherited abstracts and native labels
+      confirm_one_gpu_run:
+        type: boolean
+        default: false
+        description: Approve exactly one new private GPU audit after checking actual quota
+      expected_submission_commit:
+        type: string
+        default: ''
+        description: Required for read-only verify; exact SHA of original submit run
+permissions:
+  contents: read
+concurrency:
+  group: e1-master01d-v3-private-gpu-v1
+  cancel-in-progress: false
+jobs:
+  synthetic-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify historical evidence, synthetic controller and package
+        run: |
+          python -m unittest discover -s tests -p 'test_e1_master01d_v2.py' -v
+          python -m unittest discover -s tests -p 'test_e1_master01d_v3.py' -v
+          test ! -e configs/e1-approved-protocol.json
+      - name: Build unauthorized code-only package
+        run: |
+          python scripts/e1_master01d_v3_workflow.py build --out build/master01dv3-code
+          python -m py_compile build/master01dv3-code/runner.py
+          if python build/master01dv3-code/runner.py > build/master01dv3-blocked.txt; then exit 1; fi
+          grep -Fx 'MASTER01DV3_FAILED_CODE=AUTHORIZATION_REQUIRED' build/master01dv3-blocked.txt
+      - name: Upload non-executable code-only package
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'prepare'
+        uses: actions/upload-artifact@v4
+        with:
+          name: master01dv3-code-only
+          path: |
+            build/master01dv3-code/runner.py
+            build/master01dv3-code/kernel-metadata.json
+          if-no-files-found: error
+          retention-days: 7
+  remote:
+    needs: synthetic-and-package
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.operation != 'prepare'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 270
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Require fresh authorization and prohibit rerun submission
+        if: inputs.operation == 'submit'
+        env:
+          RIGHTS: ${{ inputs.confirm_dataset_rights }}
+          GPU: ${{ inputs.confirm_one_gpu_run }}
+        run: |
+          test "$RIGHTS" = true && test "$GPU" = true && test "$GITHUB_RUN_ATTEMPT" = 1 || { echo "MASTER01DV3_FRESH_AUTHORIZATION_REQUIRED"; exit 1; }
+      - name: Install pinned Kaggle CLI
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          test -n "$KAGGLE_API_TOKEN" || { echo "KAGGLE_API_TOKEN_REQUIRED"; exit 1; }
+          python -m pip install kaggle==2.2.5 six==1.17.0
+      - name: Read-only quota endpoint and duplicate preflight
+        if: inputs.operation == 'preflight' || inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/e1_master01d_v3_workflow.py preflight
+      - name: Build authorized private package
+        if: inputs.operation == 'submit'
+        env:
+          MASTER01DV3_RIGHTS: ${{ inputs.confirm_dataset_rights }}
+          MASTER01DV3_GPU: ${{ inputs.confirm_one_gpu_run }}
+        run: python scripts/e1_master01d_v3_workflow.py build --authorized-submit --out build/master01dv3-submit
+      - name: Notify controller start
+        if: inputs.operation == 'submit'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01d_v3_workflow.py notify --event 'controller started'
+      - name: Submit exactly one private GPU audit
+        if: inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          python scripts/e1_master01d_v3_workflow.py preflight
+          kaggle kernels push -p build/master01dv3-submit >/dev/null 2>&1 || { echo "MASTER01DV3_SUBMISSION_FAILED_OR_UNCERTAIN_NO_RETRY"; exit 1; }
+          echo "MASTER01DV3_SUBMISSION_ACCEPTED_NOT_RUNTIME_COMPLETE"
+      - name: Notify accepted submission
+        if: inputs.operation == 'submit'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01d_v3_workflow.py notify --event 'submission accepted'
+      - name: Monitor and independently validate sanitized output
+        if: inputs.operation == 'submit'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01d_v3_workflow.py monitor --expected-commit "$GITHUB_SHA" --out build/master01dv3-verified
+      - name: Read-only status
+        if: inputs.operation == 'status'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: python scripts/e1_master01d_v3_workflow.py status
+      - name: Read-only verification
+        if: inputs.operation == 'verify'
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          EXPECTED: ${{ inputs.expected_submission_commit }}
+        run: python scripts/e1_master01d_v3_workflow.py verify --expected-commit "$EXPECTED" --out build/master01dv3-verified
+      - name: Upload only strictly validated aggregate
+        if: (inputs.operation == 'submit' || inputs.operation == 'verify') && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: master01dv3-verified-aggregate
+          path: build/master01dv3-verified/master01dv3_verified_aggregate.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Notify verified completion after upload
+        if: (inputs.operation == 'submit' || inputs.operation == 'verify') && success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01d_v3_workflow.py notify --event 'Kaggle COMPLETE | aggregate independently verified | scientific approval pending'
+      - name: Notify failure without private data
+        if: failure() && inputs.operation == 'submit'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/e1_master01d_v3_workflow.py notify --event 'controller failed'
