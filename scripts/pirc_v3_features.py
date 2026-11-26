@@ -4,6 +4,29 @@ source lineage enforcement are not implemented here. Synthetic fixtures only.
 """
 from pirc_v2_method import probability, require, features
 
+def aligned_extract(original,revised,*,unit_ids,allowed):
+    """Require identical ordered evidence IDs; IDs remain private.
+    Cannot establish authenticity of upstream scores or ordering.
+    INVALID outputs must be forced to abstain by the evaluation wrapper.
+    """
+    require(type(unit_ids) is tuple and len(unit_ids)<=64 and
+            all(type(k) is str and bool(k) for k in unit_ids) and
+            len(set(unit_ids))==len(unit_ids),"UNIT_IDS")
+    candidates=[]
+    for row in (original,revised):
+        require(type(row) is dict and set(row)=={"text","confidence","units"}
+                and type(row["units"]) is list,"ALIGNED_SCHEMA")
+        require(all(type(u) is dict and set(u)=={"id","nli"} for u in row["units"]),
+                "UNIT_SCHEMA")
+        require(tuple(u["id"] for u in row["units"])==unit_ids,"UNIT_ALIGNMENT")
+        parsed=parse_answer(row["text"],allowed)
+        candidates.append({"answer":parsed,"confidence":row["confidence"],
+                           "full":[u["nli"] for u in row["units"]]})
+    return {"features":extract(*candidates,evidence_count=len(unit_ids)),
+            "original_valid":candidates[0]["answer"]!="INVALID",
+            "revised_valid":candidates[1]["answer"]!="INVALID"}
+
+
 def aggregate(scores):
     # Every evidence unit evaluated for the same single closed-answer claim.
     require(type(scores) is list and bool(scores),"EVIDENCE_SCORES")
@@ -16,9 +39,9 @@ def aggregate(scores):
             sum(s["entailment"]>=.5 for s in scores)/len(scores))
 
 def extract(original,revised,*,evidence_count):
-    """Inputs: parsed answer symbol, confidence, full and perturbed NLI scores.
-    Both candidates must be scored against exactly the same ordered evidence
-    units and deterministic perturbation. No gold labels accepted. Evidence
+    """Low-level inputs: parsed answer symbol, confidence and ordered full NLI scores.
+    Use aligned_extract to check identical evidence IDs. This low-level helper
+    assumes aligned ordering. No gold labels accepted. Evidence
     coverage is supportive-unit fraction, not recall of clinical evidence.
     Perturbation = removal of first evidence unit (fixed order, answer-blind).
     When one unit is removed all evidence is absent; support becomes zero.
