@@ -24,7 +24,7 @@ PIN={"model":"cross-encoder/nli-deberta-v3-base",
 DIGEST="a1d1677a97ca4a7b6a57c0f0e369c54a53eca014bf5daf1791122d9d7642b1e8"
 EXPECTED={"torch":"2.11.0+cu130","transformers":"5.20.2","huggingface_hub":"1.33.0",
           "numpy":"2.1.3","pyarrow":"23.0.1"}
-LEGACY=("build_inputs_with_special_tokens","create_token_type_ids_from_sequences")
+LEGACY=("encode","build_inputs_with_special_tokens","create_token_type_ids_from_sequences")
 STAGE="BOOTSTRAP"
 
 def stage(s):
@@ -62,6 +62,27 @@ def main():
         for key in LEGACY:
             print("MASTER01EV4_CPU_LEGACY_"+key.upper()+"="+
                   str(callable(getattr(tok,key,None))).upper(),flush=True)
+        # Reproduce the old tokenizer-only path using invented text. The old
+        # exception is diagnostic evidence, not a reason to bypass new checks.
+        probe="encode"
+        try:
+            x=tok.encode("An invented object is blue.",add_special_tokens=False,
+                         truncation=False,verbose=False)
+            y=tok.encode("The object is blue.",add_special_tokens=False,
+                         truncation=False,verbose=False)
+            probe="build_inputs_with_special_tokens"
+            tok.build_inputs_with_special_tokens(x,y)
+            if "token_type_ids" in tok.model_input_names:
+                probe="create_token_type_ids_from_sequences"
+                tok.create_token_type_ids_from_sequences(x,y)
+        except Exception as exc:
+            print("MASTER01EV4_CPU_OLD_PATH_FAILED_AT="+probe,flush=True)
+            print("MASTER01EV4_CPU_OLD_PATH_FAILURE_TYPE="+type(exc).__name__,flush=True)
+            name=getattr(exc,"name",None)
+            if type(exc) is AttributeError and name in LEGACY:
+                print("MASTER01EV4_CPU_OLD_PATH_MISSING_ATTRIBUTE="+name,flush=True)
+        else:
+            print("MASTER01EV4_CPU_OLD_PATH_TOKENIZER_CALLS_PASSED",flush=True)
         del tok
         stage("MODEL_LOAD_AND_PAIR_CONTRACT")
         e=n.load_offline(root,PIN,DIGEST,authorized=True,device="cpu")
