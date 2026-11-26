@@ -8,6 +8,7 @@ leave an authorized environment. Synthetic callers cannot certify real data.
 from collections import Counter, defaultdict
 from pathlib import Path
 import hashlib
+import json
 import re
 import unicodedata
 
@@ -98,7 +99,19 @@ def reconstruct_candidate(records,flags,prior_normalizer):
         "source_group_counts":{s:len({groups[r["key"]] for r in kept[s]}) for s in c.SPLITS},
         "supplemental_exact_conflicts":0}
 
-def prepare_pinned_candidate(report,records,flags,prior_normalizer,*,screen_evidence):
+def verify_holdout_identity(records,official_test_bytes):
+    """Private original official file, SHA then ID equality; no use of labels."""
+    require(type(official_test_bytes) is bytes and
+            hashlib.sha256(official_test_bytes).hexdigest()==prior.DATA_PINS["official_500_sha256"],
+            "HOLDOUT_FILE_PIN")
+    raw=json.loads(official_test_bytes)
+    require(type(raw) is dict and len(raw)==500 and
+            all(type(k) is str and k.isdigit() for k in raw),"HOLDOUT_SCHEMA")
+    ids=[r["source"] for r in records["official_holdout"]]
+    require(len(ids)==500 and len(set(ids))==500 and set(ids)==set(raw),"HOLDOUT_IDENTITY")
+
+def prepare_pinned_candidate(report,records,flags,prior_normalizer,*,screen_evidence,
+                             official_test_bytes):
     """For a FUTURE authorized private reconstruction only.
     screen_evidence is a recomputed 01B aggregate from pinned encoder routine;
     validates aggregate equivalence, not individual original pair identity.
@@ -107,6 +120,7 @@ def prepare_pinned_candidate(report,records,flags,prior_normalizer,*,screen_evid
     """
     verify_checkpoint(report);verify_prior_source_files()
     require({s:len(records[s]) for s in c.SPLITS}==ORIGINAL,"ORIGINAL_COUNTS")
+    verify_holdout_identity(records,official_test_bytes)
     require(all(r["config"] in CONFIGS for s in c.SPLITS[:3] for r in records[s]),
             "NATIVE_CONFIG")
     require(type(screen_evidence) is dict and set(screen_evidence)==
@@ -143,7 +157,9 @@ def shortcut_audit(kept,answers):
             counts["length_tie"]+=int(len(x.split())==len(y.split()))
             counts["ground_truth_exact_context_copy"]+=int(x==ctx)
             counts["hallucinated_exact_context_copy"]+=int(y==ctx)
-        out[s]=dict(counts)
+        out[s]={k:counts[k] for k in ("parents","identical_normalized_roles",
+            "hallucinated_role_longer","ground_truth_role_longer","length_tie",
+            "ground_truth_exact_context_copy","hallucinated_exact_context_copy")}
     return out
 
 def gate_report():
