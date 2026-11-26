@@ -1,0 +1,50 @@
+name: MASTER 01F-R2 Native CPU Preparation CI
+on:
+  pull_request:
+    paths:
+      - 'scripts/e1_master01f_r2_*.py'
+      - 'tests/test_e1_master01f_r2_v1.py'
+      - 'docs/E1_MASTER01F_R2_NATIVE.md'
+      - '.github/workflows/e1-master01f-r2-synthetic-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/e1_master01f_r2_*.py'
+      - 'tests/test_e1_master01f_r2_v1.py'
+      - 'docs/E1_MASTER01F_R2_NATIVE.md'
+      - '.github/workflows/e1-master01f-r2-synthetic-ci.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -p test_e1_master01f_r2_v1.py -v
+  public_metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Public metadata only (not dataset acquisition)
+        run: |
+          set +e
+          python scripts/e1_master01f_r2_native_v1.py metadata
+          status=$?
+          set -e
+          if [ "$status" = 2 ]; then
+            echo "Metadata unavailable or unreviewed; no qualification or acquisition."
+          elif [ "$status" != 0 ]; then
+            exit "$status"
+          fi
