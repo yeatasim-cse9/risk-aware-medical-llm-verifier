@@ -1,0 +1,27 @@
+name: MASTER 01F-R9 Token Audit Synthetic CI
+on:
+  pull_request:
+    paths:
+      - scripts/e1_master01fr9_token_audit_v1.py
+      - tests/test_e1_master01fr9_token_audit_v1.py
+      - .github/workflows/e1-master01fr9-ci.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/e1_master01fr9_token_audit_v1.py
+      - tests/test_e1_master01fr9_token_audit_v1.py
+      - .github/workflows/e1-master01fr9-ci.yml
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p test_e1_master01fr9_token_audit_v1.py -v
