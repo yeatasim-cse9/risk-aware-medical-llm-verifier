@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import urllib.parse
 from kaggle_status import check, ACTIVE, TERMINAL
 import e1_master01fr6r_checkpoint_v1 as cp
 
@@ -40,7 +41,8 @@ def require(ok,code):
     if not ok: raise ValueError(code)
 def sha(raw):return hashlib.sha256(raw).hexdigest()
 def cli(*args,timeout=120):
-    p=subprocess.run(["kaggle",*args],capture_output=True,timeout=timeout)
+    env={k:v for k,v in os.environ.items() if k not in ("THESIS_PRIVATE_ARCHIVE_READ_TOKEN","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID","GH_TOKEN")}
+    p=subprocess.run(["kaggle",*args],capture_output=True,timeout=timeout,env=env)
     require(p.returncode==0,"R9C_KAGGLE_COMMAND_FAILED_OR_UNCERTAIN_NO_RETRY")
     return p.stdout
 def cell(text):
@@ -119,9 +121,23 @@ def qualify_marker():
         p=Path(tmp)/QUAL_FILE
         require(p.is_file() and not p.is_symlink() and p.stat().st_size<1000,"R9C_QUAL_MARKER_MISSING")
         require(json.loads(p.read_text())=={"schema":1,"plan_sha256":PLAN_PIN,"source_sha256":SOURCE_SHA,"secret_access":True},"R9C_QUAL_MARKER")
-def notify(event,count=0,total=4):
-    # Reuse private checkpoint Telegram sender for fixed status labels.
-    cp.notify(event,count,total)
+def notify(event):
+    require(event in ("controller started","submission accepted","Kaggle running",
+                      "CPU qualification verified","GPU private chain verified",
+                      "controller failed; reconcile; no retry"),"R9C_NOTIFY_EVENT")
+    try:
+        token=os.environ.get("TELEGRAM_BOT_TOKEN","");chat=os.environ.get("TELEGRAM_CHAT_ID","")
+        require(re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+",token) is not None and
+                re.fullmatch(r"-?[0-9]+",chat) is not None,"R9C_TELEGRAM_FORMAT")
+        data=urllib.parse.urlencode({"chat_id":chat,"text":"MASTER 01F-R9C | "+event}).encode()
+        req=urllib.request.Request("https://api.telegram.org/bot"+token+"/sendMessage",data=data)
+        opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),cp.NoRedirect())
+        with opener.open(req,timeout=10) as res:
+            raw=res.read(32769)
+            require(res.status==200 and len(raw)<=32768 and json.loads(raw).get("ok") is True,"R9C_TELEGRAM_RESPONSE")
+        print("R9C_TELEGRAM_SENT",flush=True)
+    except Exception:
+        print("R9C_TELEGRAM_DELIVERY_UNCONFIRMED",flush=True)
 def verify(store):
     plan_raw=store.read(PREFIX+"plan.json")
     require(type(plan_raw) is bytes and sha(plan_raw)==PLAN_PIN,"R9C_PLAN")
@@ -150,17 +166,30 @@ def one_dispatch():
     require(data["total_count"]==1 and len(data["workflow_runs"])==1 and
             str(data["workflow_runs"][0]["id"])==os.environ["GITHUB_RUN_ID"],"R9C_PRIOR_DISPATCH_LOCKED")
 def monitor(store,mode):
-    deadline=time.monotonic()+240*60;seen=False
+    deadline=time.monotonic()+240*60;seen=False;complete_since=None
     while time.monotonic()<deadline:
         state=check(KERNEL,"any")
         if state=="running" and not seen:
-            print("R9C_KAGGLE_RUNNING",flush=True);seen=True
+            print("R9C_KAGGLE_RUNNING",flush=True);notify("Kaggle running");seen=True
         if state=="complete":
-            if mode=="cpu":qualify_marker()
-            else:verify(store)
-            return
-        require(state in ACTIVE,"R9C_TERMINAL_OR_UNKNOWN_NO_RETRY")
-        time.sleep(60)
+            # A previous version's COMPLETE can briefly persist after a push.
+            # Require new evidence; poll reads only, never submit again.
+            if complete_since is None:complete_since=time.monotonic()
+            if mode=="cpu":
+                with tempfile.TemporaryDirectory() as tmp:
+                    _,_,qualified=pull(Path(tmp))
+                if qualified:
+                    try:qualify_marker()
+                    except ValueError:
+                        if time.monotonic()-complete_since>=300:raise
+                    else:return
+            elif store.read(PREFIX+"complete.json") is not None:
+                verify(store);return
+            require(time.monotonic()-complete_since<300,"R9C_COMPLETE_WITHOUT_NEW_EVIDENCE")
+        else:
+            require(state in ACTIVE,"R9C_TERMINAL_OR_UNKNOWN_NO_RETRY")
+            complete_since=None
+        time.sleep(30)
     raise ValueError("R9C_MONITOR_TIMEOUT_NO_RETRY")
 def main():
     a=argparse.ArgumentParser();a.add_argument("op",choices=("preflight","qualify","submit","status","verify"));op=a.parse_args().op
@@ -189,15 +218,17 @@ def main():
         # Re-read the exact current source immediately before the sole push.
         again=root/"again";again.mkdir()
         _,r,q=pull(again);require(r==raw and q==qualified,"R9C_NOTEBOOK_CHANGED")
-        print("R9C_CONTROLLER_STARTED",flush=True);notify("started")
+        print("R9C_CONTROLLER_STARTED",flush=True);notify("controller started")
         cmd=["kernels","push","-p",str(out)]
         if mode=="gpu":cmd+=["--accelerator","NvidiaTeslaT4"]
         cli(*cmd,timeout=180)
-        print("R9C_SUBMISSION_ACCEPTED_NOT_COMPLETE",flush=True)
+        print("R9C_SUBMISSION_ACCEPTED_NOT_COMPLETE",flush=True);notify("submission accepted")
         monitor(store,mode)
-        print("R9C_"+mode.upper()+"_VERIFIED",flush=True);notify("complete",4,4)
+        print("R9C_"+mode.upper()+"_VERIFIED",flush=True);notify("CPU qualification verified" if mode=="cpu" else "GPU private chain verified")
 if __name__=="__main__":
     try:main()
     except Exception:
         print("R9C_FAILED_RECONCILE_NO_RETRY",flush=True)
+        if len(__import__("sys").argv)>1 and __import__("sys").argv[1] in ("qualify","submit"):
+            notify("controller failed; reconcile; no retry")
         raise SystemExit(1) from None

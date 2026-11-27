@@ -39,3 +39,11 @@ class Contract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"R9C_RUN_EXISTS_NO_RETRY"):w.fresh(Store())
     def test_qualifier_compiles(self):
         compile(w.QUAL_CODE,"qual","exec")
+
+    def test_monitor_stale_complete_does_not_approve(self):
+        class Store:
+            def read(self,p):return None
+        with patch.object(w,"check",return_value="complete"),patch.object(w.time,"monotonic",side_effect=[0,0,0,301]),patch.object(w.time,"sleep"),patch.object(w,"verify") as verify:
+            with self.assertRaisesRegex(ValueError,"R9C_COMPLETE_WITHOUT_NEW_EVIDENCE"):
+                w.monitor(Store(),"gpu")
+            verify.assert_not_called()
