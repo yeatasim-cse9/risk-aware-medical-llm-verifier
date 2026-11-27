@@ -4,6 +4,7 @@ The scientific controller bytes and plan are fixed, not reconstructed.
 """
 import argparse
 import ast
+import sys
 import hashlib
 import json
 import os
@@ -37,48 +38,101 @@ p=Path("/kaggle/working/r9c-secret-qualification.json")
 with p.open("x") as f: json.dump({"schema":1,"plan_sha256":"'''+PLAN_PIN+'''","source_sha256":"'''+SOURCE_SHA+'''","secret_access":True},f,sort_keys=True)
 print("R9C_API_CPU_SECRET_QUALIFICATION_PASSED",flush=True)
 '''
+STAGE="BOOT"
+class GateError(ValueError):
+    pass
+def mark(stage):
+    global STAGE
+    STAGE=stage
+    print("R9C_STAGE="+stage,flush=True)
 def require(ok,code):
-    if not ok: raise ValueError(code)
+    if not ok: raise GateError(code)
+def report_failure(exc):
+    # Never print remote error text, private data, source bytes, paths or secrets.
+    print("R9C_FAILED_STAGE="+STAGE,flush=True)
+    print("R9C_FAILURE_TYPE="+type(exc).__name__,flush=True)
+    if type(exc) is GateError and len(exc.args)==1 and type(exc.args[0]) is str and re.fullmatch(r"R9C_[A-Z0-9_]{1,90}",exc.args[0]):
+        print("R9C_FAILURE_CODE="+exc.args[0],flush=True)
+    elif isinstance(exc,subprocess.TimeoutExpired):
+        print("R9C_FAILURE_CODE=R9C_CLI_TIMEOUT",flush=True)
+    elif isinstance(exc,json.JSONDecodeError):
+        print("R9C_FAILURE_CODE=R9C_INVALID_JSON",flush=True)
+    elif isinstance(exc,FileNotFoundError):
+        print("R9C_FAILURE_CODE=R9C_FILE_NOT_FOUND",flush=True)
+    else:
+        print("R9C_FAILURE_CODE=R9C_UNCLASSIFIED_REQUIRES_EVIDENCE",flush=True)
 def sha(raw):return hashlib.sha256(raw).hexdigest()
 def cli(*args,timeout=120):
     env={k:v for k,v in os.environ.items() if k not in ("THESIS_PRIVATE_ARCHIVE_READ_TOKEN","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID","GH_TOKEN")}
     p=subprocess.run(["kaggle",*args],capture_output=True,timeout=timeout,env=env)
-    require(p.returncode==0,"R9C_KAGGLE_COMMAND_FAILED_OR_UNCERTAIN_NO_RETRY")
+    if p.returncode!=0:
+        print("R9C_CLI_EXIT_CODE="+str(p.returncode),flush=True)
+        # Classify only fixed signatures from argparse/HTTP errors; do not echo CLI text.
+        diagnostic=p.stdout+p.stderr
+        for code in (401,403,404,429,500,502,503,504):
+            if re.search(rb"\b"+str(code).encode()+rb"\b",diagnostic):
+                print("R9C_CLI_POSSIBLE_HTTP_STATUS="+str(code),flush=True)
+        if b"unrecognized arguments" in diagnostic.lower():
+            print("R9C_CLI_ARGUMENT_REJECTION=TRUE",flush=True)
+        raise GateError("R9C_KAGGLE_COMMAND_FAILED_OR_UNCERTAIN_NO_RETRY")
     return p.stdout
 def cell(text):
     return {"cell_type":"code","execution_count":None,"metadata":{},"outputs":[],"source":text.splitlines(keepends=True)}
 def source(cell):
     require(type(cell) is dict and cell.get("cell_type")=="code","R9C_CELL_TYPE")
-    v=cell["source"]
+    v=cell.get("source")
     require(type(v) is str or type(v) is list and all(type(x) is str for x in v),"R9C_CELL_SOURCE")
     return "".join(v)
+def canonical_source(raw,expected):
+    # Only accept newline representations that restore the exact pinned bytes.
+    # No AST equivalence, whitespace stripping or source changes.
+    candidates=[raw,raw.replace("\r\n","\n")]
+    for text in candidates:
+        for candidate in (text,text+"\n" if not text.endswith("\n") else text):
+            if sha(candidate.encode())==expected:return candidate
+    raise GateError("R9C_SOURCE_DRIFT")
 def read_notebook(folder):
-    meta=json.loads((folder/"kernel-metadata.json").read_text())
-    require(meta.get("id")==KERNEL and meta.get("is_private") is True
-            and meta.get("language")=="python" and meta.get("kernel_type")=="notebook"
-            and meta.get("enable_internet") is True
-            and meta.get("enable_tpu",False) is False,"R9C_PRIVATE_NOTEBOOK_REQUIRED")
+    mark("METADATA_READ")
+    f=folder/"kernel-metadata.json"
+    require(f.is_file() and not f.is_symlink() and 0<f.stat().st_size<100_000,"R9C_METADATA_FILE")
+    meta=json.loads(f.read_text(encoding="utf-8"))
+    require(type(meta) is dict,"R9C_METADATA_SCHEMA")
+    mark("METADATA_POLICY")
+    require(meta.get("id")==KERNEL,"R9C_KERNEL_ID_MISMATCH")
+    require(meta.get("is_private") is True,"R9C_PRIVATE_NOTEBOOK_REQUIRED")
+    require(meta.get("language")=="python","R9C_LANGUAGE_MISMATCH")
+    require(meta.get("kernel_type")=="notebook","R9C_KERNEL_TYPE_MISMATCH")
+    require(meta.get("enable_internet") is True,"R9C_INTERNET_REQUIRED")
+    require(meta.get("enable_tpu",False) is False,"R9C_TPU_BLOCKED")
+    require(meta.get("enable_gpu") is False,"R9C_CPU_SOURCE_REQUIRED")
     require(all(meta.get(k,[])==[] for k in ("dataset_sources","competition_sources","kernel_sources","model_sources")),"R9C_ATTACHMENTS_BLOCKED")
+    print("R9C_METADATA_POLICY_PASS",flush=True)
     name=meta.get("code_file")
     require(type(name) is str and Path(name).name==name and name.endswith(".ipynb"),"R9C_NOTEBOOK_PATH")
+    mark("NOTEBOOK_READ")
     p=folder/name
-    require(p.is_file() and not p.is_symlink() and p.stat().st_size<2_000_000,"R9C_NOTEBOOK_FILE")
-    n=json.loads(p.read_text());cells=n.get("cells")
-    require(type(cells) is list and len(cells) in (1,2),"R9C_CELL_COUNT")
-    raw=source(cells[0])
-    # Kaggle may remove only the final newline; accept no other variation.
-    if not raw.endswith("\n"):raw+="\n"
-    require(sha(raw.encode())==SOURCE_SHA,"R9C_SOURCE_DRIFT")
+    require(p.is_file() and not p.is_symlink() and 0<p.stat().st_size<2_000_000,"R9C_NOTEBOOK_FILE")
+    n=json.loads(p.read_text(encoding="utf-8"))
+    require(type(n) is dict,"R9C_NOTEBOOK_SCHEMA")
+    cells=n.get("cells")
+    require(type(cells) is list,"R9C_CELL_SCHEMA")
+    print("R9C_NOTEBOOK_CELL_COUNT="+str(len(cells)),flush=True)
+    require(len(cells) in (1,2),"R9C_CELL_COUNT")
+    mark("SOURCE_INTEGRITY")
+    raw=canonical_source(source(cells[0]),SOURCE_SHA)
+    print("R9C_PINNED_SOURCE_PASS",flush=True)
     qualified=len(cells)==2
     if qualified:
-        q=source(cells[1])
-        if not q.endswith("\n"):q+="\n"
-        require(q==QUAL_CODE,"R9C_QUALIFIER_DRIFT")
-    require(meta.get("enable_gpu") is False,"R9C_CPU_SOURCE_REQUIRED")
+        mark("QUALIFIER_INTEGRITY")
+        try:canonical_source(source(cells[1]),sha(QUAL_CODE.encode()))
+        except GateError as exc:raise GateError("R9C_QUALIFIER_DRIFT") from exc
     return meta,raw,qualified
 def pull(folder):
+    mark("KAGGLE_STATUS")
     require(check(KERNEL,"any")=="complete","R9C_NOTEBOOK_NOT_COMPLETE")
+    mark("KAGGLE_PULL")
     cli("kernels","pull",KERNEL,"-p",str(folder),"-m")
+    print("R9C_KAGGLE_PULL_PASS",flush=True)
     return read_notebook(folder)
 def authorized(kind):
     return (os.environ.get("GITHUB_EVENT_NAME")=="workflow_dispatch"
@@ -194,10 +248,14 @@ def monitor(store,mode):
 def main():
     a=argparse.ArgumentParser();a.add_argument("op",choices=("preflight","qualify","submit","status","verify"));op=a.parse_args().op
     if op=="status":check(KERNEL,"any");return
+    mark("ARCHIVE_AUTHENTICATION")
     store=read_store()
+    print("R9C_ARCHIVE_AUTHENTICATION_PASS",flush=True)
     if op=="verify":
         require(check(KERNEL,"any")=="complete","R9C_NOTEBOOK_NOT_COMPLETE");verify(store);return
+    mark("ARCHIVE_FRESHNESS")
     fresh(store)
+    print("R9C_ARCHIVE_FRESHNESS_PASS",flush=True)
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp);src=root/"source";src.mkdir()
         _,raw,qualified=pull(src)
@@ -213,6 +271,7 @@ def main():
                     and os.environ.get("R9C_RIGHTS_QUOTA")=="true","R9C_GPU_AUTH_REQUIRED")
             require(qualified,"R9C_CPU_QUALIFICATION_REQUIRED");qualify_marker();one_dispatch()
             cli("quota");mode="gpu"
+        mark("PACKAGE")
         out=root/"package";package(out,raw,mode)
         fresh(store)
         # Re-read the exact current source immediately before the sole push.
@@ -221,14 +280,17 @@ def main():
         print("R9C_CONTROLLER_STARTED",flush=True);notify("controller started")
         cmd=["kernels","push","-p",str(out)]
         if mode=="gpu":cmd+=["--accelerator","NvidiaTeslaT4"]
+        mark("PUSH")
         cli(*cmd,timeout=180)
         print("R9C_SUBMISSION_ACCEPTED_NOT_COMPLETE",flush=True);notify("submission accepted")
+        mark("MONITOR")
         monitor(store,mode)
         print("R9C_"+mode.upper()+"_VERIFIED",flush=True);notify("CPU qualification verified" if mode=="cpu" else "GPU private chain verified")
 if __name__=="__main__":
     try:main()
-    except Exception:
+    except Exception as exc:
+        report_failure(exc)
         print("R9C_FAILED_RECONCILE_NO_RETRY",flush=True)
-        if len(__import__("sys").argv)>1 and __import__("sys").argv[1] in ("qualify","submit"):
+        if len(sys.argv)>1 and sys.argv[1] in ("qualify","submit"):
             notify("controller failed; reconcile; no retry")
         raise SystemExit(1) from None

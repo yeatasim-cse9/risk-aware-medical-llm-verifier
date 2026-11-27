@@ -47,3 +47,39 @@ class Contract(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"R9C_COMPLETE_WITHOUT_NEW_EVIDENCE"):
                 w.monitor(Store(),"gpu")
             verify.assert_not_called()
+
+    def test_source_normalization_preserves_pin(self):
+        with patch.object(w,"SOURCE_SHA",w.sha(RAW.encode())):
+            for candidate in (RAW,RAW.rstrip("\n"),RAW.replace("\n","\r\n")):
+                self.assertEqual(w.canonical_source(candidate,w.SOURCE_SHA),RAW)
+            with self.assertRaisesRegex(ValueError,"R9C_SOURCE_DRIFT"):
+                w.canonical_source(RAW+"# changed",w.SOURCE_SHA)
+
+    def test_live_pull_failure_reports_exact_stage(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        import subprocess
+        with patch.object(w,"check",return_value="complete"),patch.object(w.subprocess,"run",return_value=subprocess.CompletedProcess([],2,b"",b"unrecognized arguments SECRET")),redirect_stdout(StringIO()) as out:
+            try:w.pull(Path("."))
+            except Exception as exc:w.report_failure(exc)
+        result=out.getvalue()
+        self.assertIn("R9C_FAILED_STAGE=KAGGLE_PULL",result)
+        self.assertIn("R9C_CLI_ARGUMENT_REJECTION=TRUE",result)
+        self.assertNotIn("SECRET",result)
+
+    def test_live_metadata_failure_reports_exact_policy(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,"SOURCE_SHA",w.sha(RAW.encode())),redirect_stdout(StringIO()) as out:
+            p=Path(tmp)/"p";w.package(p,RAW,"cpu")
+            f=p/"kernel-metadata.json";m=json.loads(f.read_text());m["is_private"]=False;f.write_text(json.dumps(m))
+            try:w.read_notebook(p)
+            except Exception as exc:w.report_failure(exc)
+        self.assertIn("R9C_FAILURE_CODE=R9C_PRIVATE_NOTEBOOK_REQUIRED",out.getvalue())
+
+    def test_remote_exception_not_leaked(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        with redirect_stdout(StringIO()) as out:w.report_failure(ValueError("R9C_PRIVATE_SECRET_IN_RAW_MESSAGE"))
+        self.assertIn("R9C_UNCLASSIFIED_REQUIRES_EVIDENCE",out.getvalue())
+        self.assertNotIn("PRIVATE_SECRET_IN_RAW_MESSAGE",out.getvalue())
