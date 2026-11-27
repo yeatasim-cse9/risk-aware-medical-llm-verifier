@@ -63,3 +63,47 @@ class Science(unittest.TestCase):
         self.assertEqual(study.budget()["over_budget"],1)
         with self.assertRaisesRegex(ValueError,"R8_COHORT_TOKEN_BUDGET_BLOCKED"):
             study.full_models()
+
+class TransferGate(unittest.TestCase):
+    def test_gpu_transfer_and_reader_cpu_guard_then_restore(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from contextlib import ExitStack
+        plan={"run_id":"r6r-r8-test"}
+        def acquire(*args,**kwargs):
+            self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"],"")
+        def rows(*args,**kwargs):
+            self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"],"")
+            return iter(())
+        def reconstruct(factory):
+            list(factory())
+            return [],[],{}
+        class StudyStub:
+            def __init__(self,*args):
+                self.outer=None
+            def compute(self,*args):
+                return {"visible":os.environ["CUDA_VISIBLE_DEVICES"]}
+        def run(plan,pin,compute,store,**kwargs):
+            return compute("lexical_reproduction",{})
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            stack.enter_context(patch.dict(os.environ,{"CUDA_VISIBLE_DEVICES":"0","HF_HUB_OFFLINE":"1"}))
+            stack.enter_context(patch.object(r,"make_plan",return_value=plan))
+            stack.enter_context(patch.object(r,"runtime",return_value={}))
+            stack.enter_context(patch.object(r.cp,"digest",return_value="pin"))
+            stack.enter_context(patch.object(r.cp,"run",side_effect=run))
+            stack.enter_context(patch.object(r.native,"approved_plan"))
+            stack.enter_context(patch.object(r.native,"acquire",side_effect=acquire))
+            stack.enter_context(patch.object(r.r3,"verified_rows",side_effect=rows))
+            stack.enter_context(patch.object(r.r7,"reconstruct",side_effect=reconstruct))
+            stack.enter_context(patch.object(r.r7,"check_r6"))
+            stack.enter_context(patch.object(r.r7,"read_r6",return_value={}))
+            stack.enter_context(patch.object(r,"read_r7",return_value={}))
+            stack.enter_context(patch.object(r,"Study",StudyStub))
+            # Avoid creating /kaggle in repository CI.
+            stack.enter_context(patch.object(r,"Path",side_effect=lambda p:Path(tmp) if p=="/kaggle/temp" else Path(p)))
+            out=r.execute(plan,"pin",None,None,None,None,None,None,commit=None,blobs=None,
+                device="cuda:0",engine_factory=None,authorized=True,model_rights=True,
+                label_reviewed=True,aggregate_reviewed=True,gpu_authorized=True)
+            self.assertEqual(out,{"visible":"0"})
+            self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"],"0")
