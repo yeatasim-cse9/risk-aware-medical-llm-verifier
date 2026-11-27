@@ -113,7 +113,7 @@ def read_r6(store, expected_hash):
     return json.loads(raw)
 
 def runtime():
-    names=("numpy","scipy","scikit-learn","pyarrow","threadpoolctl")
+    names=("numpy","scipy","scikit-learn","pyarrow","threadpoolctl","joblib")
     return {"python":platform.python_version(),"machine":platform.machine(),
             **{n:importlib.metadata.version(n) for n in names}}
 
@@ -239,7 +239,8 @@ def experiment(stage,fit,selection,nboot=NBOOT):
         return result
 
 def execute(plan,pin,store,metadata,receipt,approval_pin,r6_hash,*,authorized=False,
-            label_reviewed=False,aggregate_export_reviewed=False,max_new=None):
+            label_reviewed=False,aggregate_export_reviewed=False,max_new=None,
+            commit=None,recipe_blobs=None):
     """Lazy cohort reconstruction: already-complete runs don't read data.
     No persistent raw checkpoint; only aggregates. No GPU/model download."""
     require(authorized is True and label_reviewed is True and aggregate_export_reviewed is True,
@@ -247,6 +248,8 @@ def execute(plan,pin,store,metadata,receipt,approval_pin,r6_hash,*,authorized=Fa
     require(os.environ.get("CUDA_VISIBLE_DEVICES")=="" and
             os.environ.get("HF_HUB_OFFLINE")=="1","CPU_OFFLINE_LIBRARY_FLAGS")
     require(plan["scope"]=="private_development_aggregate" and plan["stages"]==STAGES,"R7_PLAN")
+    expected=make_plan(commit,plan["run_id"],r6_hash,approval_pin,recipe_blobs,runtime())
+    require(plan==expected and cp.digest(cp.canonical(expected))==pin,"R7_RUNTIME_PLAN_BINDING")
     native.approved_plan(metadata,r3.REV,r3.PIN,receipt,approval_pin)
     report=read_r6(store,r6_hash)
     cache=None

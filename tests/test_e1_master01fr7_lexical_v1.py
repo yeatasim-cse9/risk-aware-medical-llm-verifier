@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
 import e1_master01fr7_lexical_v1 as r
 import e1_master01f_r3_audit_v1 as r3
@@ -45,6 +46,16 @@ class Protocol(unittest.TestCase):
         b=r.make_plan("a"*40,"r6r-r7-test","b"*64,"c"*64,{"code":"d"*40},{"python":"3.12"})
         self.assertNotEqual(a["recipe_sha256"],b["recipe_sha256"])
         self.assertEqual(len(a["stages"]),5)
+    def test_runtime_plan_binding_before_remote_access(self):
+        plan=r.make_plan("a"*40,"r6r-r7-test","b"*64,"c"*64,{"code":"d"*40},{"python":"3.11"})
+        with patch.dict(r.os.environ,{"CUDA_VISIBLE_DEVICES":"","HF_HUB_OFFLINE":"1"}), \
+             patch.object(r,"runtime",return_value={"python":"3.12"}), \
+             patch.object(r,"read_r6") as read:
+            with self.assertRaisesRegex(ValueError,"R7_RUNTIME_PLAN_BINDING"):
+                r.execute(plan,r.cp.digest(r.cp.canonical(plan)),None,None,None,"c"*64,"b"*64,
+                          authorized=True,label_reviewed=True,aggregate_export_reviewed=True,
+                          commit="a"*40,recipe_blobs={"code":"d"*40})
+            read.assert_not_called()
     def test_permutation(self):
         self.assertEqual(r.permute(["a","b","c"]),["b","c","a"])
         with self.assertRaises(ValueError):r.permute(["a"])
