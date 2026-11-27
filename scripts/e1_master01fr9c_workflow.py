@@ -87,9 +87,16 @@ def canonical_source(raw,expected):
     # Only accept newline representations that restore the exact pinned bytes.
     # No AST equivalence, whitespace stripping or source changes.
     candidates=[raw,raw.replace("\r\n","\n")]
+    # The operator's downloaded notebook showed exactly one extra leading LF.
+    # Recover only this observed serialization difference, and ONLY when the
+    # resulting bytes reproduce the pre-existing SHA256. Execute those bytes,
+    # never the unverified candidate. No arbitrary whitespace stripping.
+    candidates += [text[1:] for text in candidates if text.startswith("\n")]
     for text in candidates:
         for candidate in (text,text+"\n" if not text.endswith("\n") else text):
-            if sha(candidate.encode())==expected:return candidate
+            if sha(candidate.encode())==expected:
+                if candidate!=raw:print("R9C_SOURCE_CANONICALIZED_TO_EXACT_PIN",flush=True)
+                return candidate
     raise GateError("R9C_SOURCE_DRIFT")
 def read_notebook(folder):
     mark("METADATA_READ")

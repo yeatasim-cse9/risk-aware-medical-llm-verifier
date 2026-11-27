@@ -83,3 +83,25 @@ class Contract(unittest.TestCase):
         with redirect_stdout(StringIO()) as out:w.report_failure(ValueError("R9C_PRIVATE_SECRET_IN_RAW_MESSAGE"))
         self.assertIn("R9C_UNCLASSIFIED_REQUIRES_EVIDENCE",out.getvalue())
         self.assertNotIn("PRIVATE_SECRET_IN_RAW_MESSAGE",out.getvalue())
+
+    def test_observed_single_leading_lf_restores_exact_pin(self):
+        # Synthetic reproduction of the observed one-byte difference.
+        with patch.object(w,"SOURCE_SHA",w.sha(RAW.encode())):
+            for altered in ("\n"+RAW,"\r\n"+RAW.replace("\n","\r\n")):
+                recovered=w.canonical_source(altered,w.SOURCE_SHA)
+                self.assertEqual(recovered.encode(),RAW.encode())
+                self.assertEqual(w.sha(recovered.encode()),w.SOURCE_SHA)
+            for altered in ("\n\n"+RAW,"\n"+RAW+"# changed","\n"+RAW.replace("False","True",1)):
+                with self.assertRaisesRegex(ValueError,"R9C_SOURCE_DRIFT"):
+                    w.canonical_source(altered,w.SOURCE_SHA)
+
+    def test_pulled_notebook_exact_repair_and_package(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,"SOURCE_SHA",w.sha(RAW.encode())):
+            p=Path(tmp)/"source";w.package(p,RAW,"cpu")
+            f=p/"runner.ipynb";n=json.loads(f.read_text())
+            n["cells"][0]["source"].insert(0,"\n");f.write_text(json.dumps(n))
+            _,recovered,qualified=w.read_notebook(p)
+            self.assertTrue(qualified)
+            self.assertEqual(recovered,RAW)
+            q=Path(tmp)/"package";w.package(q,recovered,"cpu")
+            self.assertEqual(w.source(json.loads((q/"runner.ipynb").read_text())["cells"][0]),RAW)
