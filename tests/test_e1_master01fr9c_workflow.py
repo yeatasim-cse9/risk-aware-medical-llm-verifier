@@ -1,0 +1,41 @@
+import sys
+import unittest
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
+import e1_master01fr9c_workflow as w
+RAW='MODE = "PREFLIGHT"\nFRESH_GPU_AUTHORIZATION = False\nSUPERVISOR_PROTOCOL_REVIEW_CONFIRMED = False\nRIGHTS_AND_QUOTA_RECONFIRMED = False\n'
+class Contract(unittest.TestCase):
+    def test_flag_only(self):
+        with patch.object(w,"SOURCE_SHA",w.sha(RAW.encode())):
+            result=w.render(RAW,"gpu")
+            self.assertEqual(result,RAW.replace('"PREFLIGHT"','"EXECUTE"').replace("False","True"))
+            self.assertEqual(w.render(RAW,"cpu"),RAW)
+    def test_drift(self):
+        with self.assertRaisesRegex(ValueError,"R9C_SOURCE_DRIFT"):w.render(RAW,"gpu")
+    def test_default_no_auth(self):
+        with patch.dict(w.os.environ,{},clear=True):
+            self.assertFalse(w.authorized("GPU"));self.assertFalse(w.authorized("CPU"))
+    def test_attempt_gate(self):
+        env={"GITHUB_EVENT_NAME":"workflow_dispatch","GITHUB_REPOSITORY":w.REPO,"GITHUB_REF":"refs/heads/main","GITHUB_RUN_ATTEMPT":"2","R9C_GPU":"true"}
+        with patch.dict(w.os.environ,env,clear=True):self.assertFalse(w.authorized("GPU"))
+    def test_cpu_package(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,"SOURCE_SHA",w.sha(RAW.encode())):
+            p=Path(tmp)/"p";w.package(p,RAW,"cpu")
+            self.assertFalse(json.loads((p/"kernel-metadata.json").read_text())["enable_gpu"])
+            self.assertEqual(w.read_notebook(p)[1:],(RAW,True))
+    def test_gpu_package(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,"SOURCE_SHA",w.sha(RAW.encode())):
+            p=Path(tmp)/"p";w.package(p,RAW,"gpu")
+            m=json.loads((p/"kernel-metadata.json").read_text())
+            self.assertTrue(m["enable_gpu"] and m["is_private"])
+            self.assertEqual(m["machine_shape"],"NvidiaTeslaT4")
+            self.assertEqual(len(json.loads((p/"runner.ipynb").read_text())["cells"]),1)
+    def test_existing_plan_stops(self):
+        class Store:
+            def read(self,p):return b"existing"
+        with self.assertRaisesRegex(ValueError,"R9C_RUN_EXISTS_NO_RETRY"):w.fresh(Store())
+    def test_qualifier_compiles(self):
+        compile(w.QUAL_CODE,"qual","exec")
