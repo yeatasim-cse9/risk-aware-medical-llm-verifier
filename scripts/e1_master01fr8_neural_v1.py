@@ -195,12 +195,12 @@ def execute(plan,pin,store,metadata,receipt,approval_pin,r6_hash,r7_hash,*,commi
             temp=Path("/kaggle/temp");temp.mkdir(exist_ok=True)
             root=Path(tempfile.mkdtemp(prefix="master01fr8-",dir=temp));root.chmod(0o700)
             try:
-                native.acquire(metadata,r3.REV,r3.PIN,receipt,approval_pin,root/"train",allow=True)
-                # r3 reader intentionally requires CPU visibility flag even for a
-                # later GPU inference phase. Never initialize CUDA during reading.
+                # Both native transfer and row reading require CPU visibility
+                # flag. Restore the original environment before engine creation.
                 prev=os.environ.get("CUDA_VISIBLE_DEVICES")
                 os.environ["CUDA_VISIBLE_DEVICES"]=""
                 try:
+                    native.acquire(metadata,r3.REV,r3.PIN,receipt,approval_pin,root/"train",allow=True)
                     factory=lambda:r3.verified_rows(root/"train",metadata,receipt,approval_pin,
                                                    allow=True,label_semantics_confirmed=True)
                     fit,sel,summary=r7.reconstruct(factory)
