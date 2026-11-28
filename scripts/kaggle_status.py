@@ -26,9 +26,6 @@ def parse_status(text: str) -> str:
     if not match:
         raise ValueError("Unrecognized Kaggle status format")
     state = match.group(1).lower()
-    # Exact observed SDK enum alias; cancellation requests remain nonterminal/unknown.
-    if state == "cancel_acknowledged":
-        state = "cancelacknowledged"
     if state not in ACTIVE | TERMINAL:
         raise ValueError("Unexpected Kaggle notebook status")
     return state

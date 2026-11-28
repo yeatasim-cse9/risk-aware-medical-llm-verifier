@@ -2,6 +2,10 @@
 Read-only preflight and separately authorized one-shot submission.
 """
 import argparse
+import contextlib
+import io
+import re
+import subprocess
 import json
 import os
 from pathlib import Path
@@ -9,6 +13,7 @@ import tempfile
 import time
 import urllib.request
 import r13h_v2_private_gpu_controller as v2
+from kaggle_status import kernel_exists, parse_status
 
 STAGE="INIT"
 V2_RUN="46158800788"
@@ -44,6 +49,25 @@ def lock():
     gate(r["total_count"]==1 and len(r["workflow_runs"])==1 and
          str(r["workflow_runs"][0]["id"])==os.environ["GITHUB_RUN_ID"])
 
+def parse_recovery_status(raw):
+    # Keep the historical shared parser and every source pin unchanged.
+    try:
+        return parse_status(raw)
+    except ValueError:
+        match=re.search(r'has status\s+["\']?(?:KernelWorkerStatus\.)?([A-Za-z_]+)',raw,re.I)
+        if match and match.group(1).lower()=="cancel_acknowledged":
+            return "cancelacknowledged"
+        raise
+
+def state(kernel):
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        if not kernel_exists(kernel):
+            return "missing"
+        env={k:v for k,v in os.environ.items() if k not in ("R13G_PRIVATE_CONFIG","R13H_PRIVATE_EXPECTED","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID","GH_TOKEN")}
+        p=subprocess.run(["kaggle","kernels","status",kernel],capture_output=True,text=True,timeout=90,env=env)
+        gate(p.returncode==0)
+        return parse_recovery_status(p.stdout+"\n"+p.stderr)
+
 def preflight():
     mark("HISTORICAL_RUNS"); history()
     mark("PRIVATE_CONFIG"); c=v2.config()
@@ -53,9 +77,9 @@ def preflight():
     gate("--timeout" in h and "--accelerator" in h)
     owner=c["dataset_source"].split("/")[0]
     prefix=owner+"/master-01f-r13h-private-gpu-"
-    mark("V1_CANCEL_STATUS"); gate(v2.state(prefix+"v1") in v2.CANCELLED)
-    mark("V2_ABSENCE"); gate(v2.state(prefix+"v2")=="missing")
-    mark("V3_ABSENCE"); gate(v2.state(prefix+"v3")=="missing")
+    mark("V1_CANCEL_STATUS"); gate(state(prefix+"v1") in v2.CANCELLED)
+    mark("V2_ABSENCE"); gate(state(prefix+"v2")=="missing")
+    mark("V3_ABSENCE"); gate(state(prefix+"v3")=="missing")
     # Build in temporary directory without submission or external assets.
     mark("PRIVATE_PACKAGE")
     with tempfile.TemporaryDirectory() as tmp:
@@ -83,7 +107,7 @@ def submit():
     mark("MONITOR")
     start=time.monotonic(); next_notice=1800; seen=False; runtime_start=None
     while time.monotonic()-start<v2.CONTROLLER_SECONDS:
-        s=v2.state(kernel); phase=v2.classify(s); now=time.monotonic(); elapsed=now-start
+        s=state(kernel); phase=v2.classify(s); now=time.monotonic(); elapsed=now-start
         if phase=="runtime" and not seen:
             seen=True; runtime_start=now
             notify("Kaggle runtime RUNNING observed")
