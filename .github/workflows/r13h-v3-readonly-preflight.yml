@@ -1,0 +1,32 @@
+name: R13-H V3 Read-only Recovery Preflight
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/r13h_v3_recovery_controller.py'
+      - '.github/workflows/r13h-v3-readonly-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  preflight:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p test_r13h_v3_recovery.py -v
+      - run: python -m pip install kaggle==2.2.5 six==1.17.0
+      - name: Read-only recovery gates (no GPU or weights)
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          R13G_PRIVATE_CONFIG: ${{ secrets.R13G_PRIVATE_CONFIG }}
+          R13H_PRIVATE_EXPECTED: ${{ secrets.R13H_PRIVATE_EXPECTED }}
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/r13h_v3_recovery_controller.py preflight
