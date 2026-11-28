@@ -1,0 +1,41 @@
+name: MASTER 01F-R13-H One-shot Private GPU Correction
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_one_gpu_run:
+        type: boolean
+        required: true
+        default: false
+      confirm_rights_quota_and_privacy:
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r13h-one-shot-private-gpu
+  cancel-in-progress: false
+jobs:
+  submit:
+    if: github.repository == 'yeatasim-cse9/risk-aware-medical-llm-verifier' && github.ref == 'refs/heads/main' && inputs.confirm_one_gpu_run && inputs.confirm_rights_quota_and_privacy && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p test_r13h_gates.py -v
+      - run: python -m pip install kaggle==2.2.5 six==1.17.0
+      - name: One authorized private GPU submission with hard runtime cap
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          R13G_PRIVATE_CONFIG: ${{ secrets.R13G_PRIVATE_CONFIG }}
+          R13H_PRIVATE_EXPECTED: ${{ secrets.R13H_PRIVATE_EXPECTED }}
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/r13h_private_gpu_controller.py
