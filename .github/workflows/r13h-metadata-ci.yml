@@ -4,12 +4,14 @@ on:
     paths:
       - 'scripts/r13h_*.py'
       - 'tests/test_r13h_gates.py'
+      - 'tests/test_r13h_v2_gates.py'
       - '.github/workflows/r13h-*.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/r13h_*.py'
       - 'tests/test_r13h_gates.py'
+      - 'tests/test_r13h_v2_gates.py'
       - '.github/workflows/r13h-*.yml'
 permissions:
   contents: read
@@ -25,6 +27,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s tests -p test_r13h_gates.py -v
+      - run: python -m unittest discover -s tests -p test_r13h_v2_gates.py -v
       - name: Exact publisher revision metadata only (no model download)
         run: python -c "import sys; sys.path.insert(0,'scripts'); from r13h_model_gate import get_manifest; get_manifest(); print('R13H_EXACT_MODEL_METADATA_PASS')"
       - name: Verify pinned Kaggle CLI timeout and accelerator interface
