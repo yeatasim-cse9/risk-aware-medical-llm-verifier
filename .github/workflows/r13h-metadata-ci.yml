@@ -1,0 +1,35 @@
+name: R13-H Metadata and Synthetic Gates
+on:
+  pull_request:
+    paths:
+      - 'scripts/r13h_*.py'
+      - 'tests/test_r13h_gates.py'
+      - '.github/workflows/r13h-*.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/r13h_*.py'
+      - 'tests/test_r13h_gates.py'
+      - '.github/workflows/r13h-*.yml'
+permissions:
+  contents: read
+jobs:
+  gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p test_r13h_gates.py -v
+      - name: Exact publisher revision metadata only (no model download)
+        run: python -c "import sys; sys.path.insert(0,'scripts'); from r13h_model_gate import get_manifest; get_manifest(); print('R13H_EXACT_MODEL_METADATA_PASS')"
+      - name: Verify pinned Kaggle CLI timeout and accelerator interface
+        run: |
+          python -m pip install kaggle==2.2.5 six==1.17.0
+          kaggle kernels push --help > /tmp/r13h-help
+          grep -q -- '--timeout' /tmp/r13h-help
+          grep -q -- '--accelerator' /tmp/r13h-help
